@@ -1,0 +1,41 @@
+# Bí mật
+.env
+kaggle.json
+
+# Dữ liệu: data/raw/ và data/fallback/ ĐƯỢC commit để cả nhóm dùng chung.
+# data/landing/ là cache sinh lại được bằng `make ingest` → không commit.
+data/landing/*
+!data/landing/.gitkeep
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# dbt
+dbt/olist_dw/target/
+dbt/olist_dw/dbt_packages/
+dbt/olist_dw/logs/
+dbt/olist_dw/profiles.yml
+dbt/olist_dw/.user.yml
+
+# Airflow / logs
+logs/
+airflow/logs/
+
+# Power BI (.pbip): bỏ cache và setting cá nhân
+powerbi/**/.pbi/localSettings.json
+powerbi/**/.pbi/cache.abf
+
+# Nháp commit message cá nhân
+commit.txt
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+CLAUDE.md

@@ -1,0 +1,100 @@
+name: olist-dss
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-olist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-olist}
+      POSTGRES_DB: ${POSTGRES_DB:-olist_dw}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Chỉ chạy lần đầu khi volume pgdata còn trống
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-olist} -d ${POSTGRES_DB:-olist_dw}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: ${MC_IMAGE:-minio/mc:RELEASE.2025-04-16T18-13-26Z}
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb -p local/$${LAKE_BUCKET} &&
+      echo 'bucket ready'
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      LAKE_BUCKET: ${LAKE_BUCKET:-olist-lake}
+    restart: "no"
+
+  # Chỉ bật khi cần: make up-airflow (docker compose --profile airflow up -d)
+  airflow:
+    profiles: ["airflow"]
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: olist-airflow:local
+    user: "${AIRFLOW_UID:-50000}:0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Ghi đè giá trị localhost trong .env bằng tên service trong mạng docker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      MINIO_ENDPOINT: http://minio:9000
+      OLIST_HOME: /opt/olist
+      PYTHONPATH: /opt/olist
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/olist/airflow/dags
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-olist}:${POSTGRES_PASSWORD:-olist}@postgres:5432/${AIRFLOW_DB:-airflow}
+    command: >
+      bash -c "
+      airflow db migrate &&
+      (airflow users create --username $${AIRFLOW_ADMIN_USER:-admin} --password $${AIRFLOW_ADMIN_PASSWORD:-admin}
+        --firstname Olist --lastname Admin --role Admin --email admin@example.com || true) &&
+      exec airflow standalone
+      "
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount cả repo: DAG, ingestion, dbt, ml, scripts, data dùng chung với máy host
+      - .:/opt/olist
+
+volumes:
+  pgdata:
+  miniodata:

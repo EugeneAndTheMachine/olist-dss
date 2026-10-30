@@ -1,0 +1,53 @@
+version: 2
+
+# TV2 (S4–S7) bổ sung: dim_geography, dim_product, dim_customer, dim_payment_type, dim_seller, dim_lead_*
+models:
+  - name: dim_date
+    description: "1 dòng / ngày 2016-01-01 → 2019-12-31, khoá YYYYMMDD; dòng -1 cho sự kiện chưa xảy ra."
+    columns:
+      - name: date_key
+        description: "YYYYMMDD; -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: full_date
+        description: "Ngày"
+      - name: day_name
+        description: "Tên thứ (tiếng Anh)"
+      - name: day_of_week_no
+        description: "1 = thứ Hai … 7 = Chủ nhật (ISO)"
+      - name: is_weekend
+        description: "Thứ Bảy / Chủ nhật"
+      - name: iso_week
+        description: "Tuần ISO"
+      - name: month_no
+        description: "Tháng 1–12"
+      - name: month_name
+        description: "Tên tháng (tiếng Anh)"
+      - name: quarter
+        description: "Quý 1–4"
+      - name: year
+        description: "Năm"
+      - name: year_month
+        description: "YYYY-MM"
+      - name: is_br_holiday
+        description: "Ngày lễ quốc gia Brazil"
+      - name: holiday_name
+        description: "Tên ngày lễ"
+      - name: is_black_friday_week
+        description: "Thuộc tuần ISO chứa Black Friday (thứ Sáu thứ 4 tháng 11)"
+
+  - name: dim_order_status
+    description: "1 dòng / trạng thái đơn (từ seed order_status_map) + unknown -1."
+    columns:
+      - name: order_status_key
+        description: "Surrogate key (băm từ order_status); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: order_status
+        description: "Trạng thái gốc"
+        data_tests: [unique, not_null]
+      - name: status_group
+        description: "Completed / Open / Cancelled / Unknown"
+        data_tests:
+          - accepted_values:
+              values: ["Completed", "Open", "Cancelled", "Unknown"]
+      - name: counts_as_sale
+        description: "Đơn được tính vào GMV / Orders"

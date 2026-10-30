@@ -1,0 +1,12 @@
+# Giữ LF cho file chạy trong Linux container / make, tránh lỗi CRLF trên Windows
+* text=auto
+Makefile text eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+
+# Dữ liệu nguồn: giữ nguyên từng byte, không đổi line ending
+data/** -text

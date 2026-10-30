@@ -1,0 +1,52 @@
+version: 2
+
+# Mẫu YAML cho staging. Mọi model mới: description cho model + từng cột, test key.
+models:
+  - name: stg_orders
+    description: "Đơn hàng đã dedup (bản _loaded_at mới nhất), ép kiểu, dẫn xuất cờ giao hàng. 1 dòng / order_id."
+    columns:
+      - name: order_id
+        description: "Mã đơn (natural key)"
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: "Mã khách theo đơn (Olist cấp mới mỗi đơn) — map sang customer_unique_id ở int_customer_map"
+        data_tests: [not_null]
+      - name: order_status
+        description: "Trạng thái đơn (lower case)"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('order_status_map')
+              field: order_status
+      - name: order_purchase_timestamp
+        description: "Thời điểm mua"
+        data_tests: [not_null]
+      - name: order_approved_at
+        description: "Thời điểm duyệt thanh toán"
+      - name: order_delivered_carrier_date
+        description: "Thời điểm giao cho hãng vận chuyển"
+      - name: order_delivered_customer_date
+        description: "Thời điểm khách nhận; null nếu chưa giao hoặc lỗi giao trước ngày mua"
+      - name: order_estimated_delivery_date
+        description: "Ngày hứa giao"
+      - name: _dq_issue
+        description: "Mã lỗi chất lượng dữ liệu nếu có (delivered_before_purchase)"
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+      - name: is_delivered
+        description: "order_status = delivered và có ngày khách nhận"
+      - name: is_late
+        description: "is_delivered và delivered::date > estimated::date"
+      - name: delay_days
+        description: "delivered::date − estimated::date (âm = sớm); chỉ khi is_delivered"
+
+  - name: stg_br_holidays
+    description: "Ngày lễ quốc gia Brazil, 1 dòng / ngày."
+    columns:
+      - name: holiday_date
+        description: "Ngày lễ"
+        data_tests: [unique, not_null]
+      - name: holiday_name
+        description: "Tên lễ (gộp bằng '; ' nếu trùng ngày)"

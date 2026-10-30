@@ -1,0 +1,13 @@
+# Build context của image Airflow chỉ cần requirements-airflow.txt; repo được mount lúc chạy
+data/
+.venv/
+venv/
+.git/
+**/__pycache__/
+dbt/olist_dw/target/
+dbt/olist_dw/dbt_packages/
+dbt/olist_dw/logs/
+logs/
+powerbi/
+docs/
+.env

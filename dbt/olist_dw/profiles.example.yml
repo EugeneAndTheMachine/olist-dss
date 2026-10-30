@@ -1,0 +1,14 @@
+# Copy thành profiles.yml cùng thư mục (make dbt-profile tự làm). profiles.yml không commit.
+# Mọi giá trị đọc từ biến môi trường (.env được Makefile export).
+olist_dw:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | as_number }}"
+      user: "{{ env_var('POSTGRES_USER', 'olist') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'olist') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'olist_dw') }}"
+      schema: stg
+      threads: 4

@@ -1,0 +1,52 @@
+name: olist_dw
+version: "0.1.0"
+config-version: 2
+profile: olist_dw
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  analysis_start: "{{ env_var('ANALYSIS_START', '2017-01-01') }}"
+  analysis_end: "{{ env_var('ANALYSIS_END', '2018-08-31') }}"
+  # dim_date: 2016-01-01 → 2019-12-31 (end exclusive)
+  date_spine_start: "2016-01-01"
+  date_spine_end: "2020-01-01"
+  # Chính sách dùng khi tra phiên bản SCD2 mở
+  scd_open_end_date: "9999-12-31"
+  scd_first_valid_from: "1900-01-01"
+
+# Schema đích lấy đúng tên (stg, dw, bi) nhờ macro generate_schema_name
+models:
+  olist_dw:
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +schema: stg
+      +materialized: table
+    intermediate:
+      +schema: stg
+      +materialized: table
+    warehouse:
+      +schema: dw
+      +materialized: table
+    bi:
+      +schema: bi
+      +materialized: view
+
+seeds:
+  olist_dw:
+    +schema: stg
+    +persist_docs:
+      relation: true
+      columns: true
+
+snapshots:
+  olist_dw:
+    +target_schema: stg

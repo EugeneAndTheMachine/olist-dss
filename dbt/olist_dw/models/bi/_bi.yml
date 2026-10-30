@@ -1,0 +1,19 @@
+version: 2
+
+# TV3 (F6) bổ sung các view còn lại theo CLAUDE.md mục 14.1. View ML chỉ lấy model_run_id mới nhất.
+models:
+  - name: v_dim_order_status
+    description: "Dim trạng thái đơn cho Power BI."
+    columns:
+      - name: order_status_key
+        description: "Khoá nối với fact"
+        data_tests: [unique, not_null]
+      - name: Order Status
+        description: "Trạng thái gốc"
+        quote: true
+      - name: Status Group
+        description: "Completed / Open / Cancelled / Unknown"
+        quote: true
+      - name: Counts As Sale
+        description: "Đơn tính là bán"
+        quote: true

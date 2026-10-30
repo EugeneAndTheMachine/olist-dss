@@ -1,0 +1,6 @@
+rule_version,tier,priority,min_orders_3m,max_late_rate_3m,min_avg_score_3m,min_months_since_first,note
+v1,New,1,5,,,3,"< 3 tháng kể từ đơn đầu HOẶC orders_3m < min_orders_3m"
+v1,At-risk,2,5,0.15,3.5,,"orders_3m >= 5 VÀ (late_rate_3m >= 0.15 HOẶC avg_score_3m < 3.5)"
+v1,Gold,3,50,0.05,4.5,,"orders_3m >= 50, late_rate_3m < 0.05, avg_score_3m >= 4.5"
+v1,Silver,4,15,0.08,4.2,,"orders_3m >= 15, late_rate_3m < 0.08, avg_score_3m >= 4.2"
+v1,Bronze,5,,,,,"còn lại"
