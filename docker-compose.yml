@@ -4,6 +4,8 @@ services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    # Mặc định Docker cấp /dev/shm 64 MB → join song song khi build fact lỗi "could not resize shared memory segment"
+    shm_size: 512mb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-olist}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-olist}
@@ -69,8 +71,7 @@ services:
     command: >
       bash -c "
       airflow db migrate &&
-      (airflow users create --username $${AIRFLOW_ADMIN_USER:-admin} --password $${AIRFLOW_ADMIN_PASSWORD:-admin}
-        --firstname Olist --lastname Admin --role Admin --email admin@example.com || true) &&
+      (airflow users create --username $${AIRFLOW_ADMIN_USER:-admin} --password $${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname Olist --lastname Admin --role Admin --email admin@example.com || true) &&
       exec airflow standalone
       "
     ports:

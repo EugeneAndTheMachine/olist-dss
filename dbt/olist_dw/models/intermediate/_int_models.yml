@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: int_customer_map
+    description: "Map customer_id (theo đơn) → customer_unique_id (người thật), kèm địa chỉ giao của đơn đó."
+    columns:
+      - name: customer_id
+        description: "Mã khách theo đơn"
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: "Mã người mua thật — natural key của dim_customer"
+        data_tests: [not_null]
+      - name: customer_zip_prefix
+        description: "Zip giao hàng của đơn"
+      - name: customer_city
+        description: "Thành phố giao hàng (lower, bỏ dấu)"
+      - name: customer_state
+        description: "Bang giao hàng"

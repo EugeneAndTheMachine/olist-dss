@@ -1,24 +1,27 @@
-# dbt models — việc còn lại theo task
+# dbt models — tiến độ theo task
 
-Model mẫu đã có (copy cấu trúc CTE + YAML khi viết model mới):
+Đã có (01/11/2026, `dbt build` xanh):
 
-| Layer | Mẫu | Ghi chú |
+| Layer | Model | Task |
 | --- | --- | --- |
-| staging | `stg_orders`, `stg_br_holidays` | dedup theo `_loaded_at` → ép kiểu → rule DQ → cờ dẫn xuất |
-| warehouse/dims | `dim_date`, `dim_order_status` | `int_sk()`, `unknown_key()`, `date_key()` trong `macros/` |
-| bi | `v_dim_order_status` | view mỏng, tên cột thân thiện |
+| staging | `stg_orders`, `stg_order_items`, `stg_order_payments`, `stg_order_reviews`, `stg_customers`, `stg_sellers`, `stg_products`, `stg_geolocation`, `stg_product_category_name_translation`, `stg_mql`, `stg_closed_deals`, `stg_br_states`, `stg_calendar_events`, `stg_br_holidays` | S3 |
+| intermediate | `int_customer_map` | S3 |
+| intermediate | `int_order_primary_seller`, `int_order_agg` | F1 |
+| warehouse/dims | `dim_date`, `dim_order_status`, `dim_geography`, `dim_product`, `dim_customer`, `dim_payment_type` | S4 |
+| warehouse/dims | `dim_seller` — **bản tạm Type 1** (tier Unscored, cấu trúc SCD2 sẵn) | S6 (tạm) |
+| warehouse/facts | `fact_order_item`, `fact_payment`, `fact_order_fulfillment`, `fact_review` | F2, F3 |
+| bi | `v_dim_order_status` (mẫu) | F6 |
+| tests | `assert_dim_seller_*` (SCD2), `assert_reconcile_*`, `assert_fact_unknown_key_share`, `assert_fulfillment_dates_in_order` | S7, F5 |
 
-Cần viết (CLAUDE.md mục 7, 9, 10, 14):
+Macro dùng chung (`macros/`): `int_sk`, `unknown_key`, `coalesce_key`, `date_key`, `clean_text`, `zip5`, `clean_city`, `state_code`, `to_bool`, `haversine_km`, `lag_days`.
 
-| Thư mục | Model | Task | Người |
-| --- | --- | --- | --- |
-| staging | `stg_order_items`, `stg_order_payments`, `stg_order_reviews`, `stg_customers`, `stg_sellers`, `stg_products`, `stg_geolocation`, `stg_product_category_name_translation`, `stg_mql`, `stg_closed_deals`, `stg_br_states`, `stg_calendar_events` | S3 | Minh Hiếu (TV2) |
-| intermediate | `int_customer_map` | S3 | Minh Hiếu (TV2) |
-| intermediate | `int_seller_month_metrics`, `int_seller_tier_monthly`, `int_seller_tier_versions` | S6 | Minh Hiếu (TV2) |
-| intermediate | `int_order_primary_seller`, `int_order_agg` | F1 | Xuân Vinh (TV3) |
-| warehouse/dims | `dim_geography`, `dim_product`, `dim_customer`, `dim_payment_type`, `dim_seller` | S4, S6 | Minh Hiếu (TV2) |
-| warehouse/dims | `dim_lead_origin`, `dim_lead_profile`, `dim_sales_rep` | S5 | Minh Hiếu (TV2) |
-| warehouse/facts | `fact_lead_funnel` | S5 | Minh Hiếu (TV2) |
-| warehouse/facts | `fact_order_item`, `fact_payment`, `fact_order_fulfillment`, `fact_review`, `fact_seller_month`, `fact_seller_product_activity` | F2–F4 | Xuân Vinh (TV3) |
-| bi | `v_*` còn lại | F6 | Xuân Vinh (TV3) |
-| tests | singular tests (business rule, reconciliation) | S7, F5 | TV2, TV3 |
+Cần viết tiếp (implementation.md mục 7, 10, 14):
+
+| Thư mục | Model | Task |
+| --- | --- | --- |
+| intermediate | `int_seller_month_metrics`, `int_seller_tier_monthly`, `int_seller_tier_versions` → thay `dim_seller` bằng SCD2 | S6 |
+| warehouse/dims | `dim_lead_origin`, `dim_lead_profile`, `dim_sales_rep` | S5 |
+| warehouse/facts | `fact_lead_funnel` (có `has_full_90d_window`) | S5 |
+| warehouse/facts | `fact_seller_month` (SHOULD), `fact_seller_product_activity` (COULD) | F4 |
+| bi | `v_*` còn lại (dims, facts, ML, DQ) | F6 |
+| tests | point-in-time lookup SCD2; Σ fact_seller_month = Σ fact_order_item | S7, F5 |

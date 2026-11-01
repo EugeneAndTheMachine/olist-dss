@@ -125,14 +125,16 @@ Chạy dbt thủ công (không qua make) thì phải có biến môi trường c
 ## 7. Airflow (1 máy — Ngọc Cẩn)
 
 ```bash
-make up-airflow                         # build image lần đầu ~5–10 phút
+make up-airflow                         # build image lần đầu ~5–10 phút, image ~3 GB (cần ≥ 25 GB trống ở ổ chứa dữ liệu Docker)
 docker compose logs -f airflow          # chờ "Airflow is ready"
 ```
 
 - UI: http://localhost:8080 — đăng nhập `AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD` trong `.env` (mặc định `admin` / `admin`).
 - DAG `olist_pipeline` mặc định **paused** → bật rồi bấm *Trigger DAG*.
 - Container mount cả repo vào `/opt/olist`; trong container `POSTGRES_HOST=postgres`, `AZURITE_HOST=azurite` (docker-compose ghi đè `.env`; `ingestion/lake.py` tự đổi `127.0.0.1:10000` → `azurite:10000`, connection string Azure thật giữ nguyên).
-- dbt chạy trong venv riêng `/opt/airflow/dbt_venv`.
+- dbt chạy trong venv riêng `/opt/airflow/dbt_venv`; package dbt cài vào `/opt/airflow/dbt_packages` trong container (biến `DBT_PACKAGES_INSTALL_PATH`), không ghi lên `dbt/olist_dw/dbt_packages` của máy host. Lý do: trên Windows, giải nén lên thư mục mount bị thiếu file mà dbt không báo lỗi.
+- Không cần UI cũng chạy được bằng CLI: `docker compose exec airflow airflow dags trigger olist_pipeline`, xem kết quả: `docker compose exec airflow airflow tasks states-for-dag-run olist_pipeline <run_id>`.
+- Log từng task: UI → DAG → Grid → chọn task → *Logs*; callback cũng ghi mỗi task 1 dòng `airflow:<task_id>` vào `meta.etl_run_log`.
 - Máy yếu: không cần Airflow, dùng `make all`.
 
 ## 8. Power BI (Xuân Vinh, Trường An)
@@ -162,4 +164,9 @@ Mở terminal ở thư mục gốc repo → `claude`. Claude tự đọc `CLAUDE
 | `uv sync` lỗi build `llvmlite` / `numba` | Đã chặn bằng `constraint-dependencies` trong `pyproject.toml`; kiểm tra đang dùng Python 3.11 (`uv run python --version`) |
 | `uv: command not found` sau khi cài | Mở lại terminal (uv thêm thư mục cài vào PATH) |
 | Bảng `ml.*`/`meta.*` không tồn tại | Volume pgdata được tạo trước khi có script init → `make reset-db` |
+| Không đăng nhập được Airflow bằng `admin` / `admin` | `airflow standalone` đã tự tạo admin với mật khẩu ngẫu nhiên → `docker compose exec airflow airflow users reset-password --username admin --password admin` |
+| Task ML lỗi `libgomp.so.1: cannot open shared object file` | Image cũ chưa có `libgomp1` (LightGBM cần) → `make up-airflow` (build lại, Dockerfile đã cài) |
+| `dbt_seed`/`dbt_build` trong Airflow lỗi `No dbt_project.yml found at expected path .../dbt_packages/dbt_utils` | Package bị giải nén thiếu trên thư mục mount → DAG đã dùng `DBT_PACKAGES_INSTALL_PATH`; trên máy host chạy lại `rm -rf dbt/olist_dw/dbt_packages && make dbt-deps` |
+| Build image lỗi `no space left on device` | Ổ C: đầy (dữ liệu Docker mặc định ở `%LOCALAPPDATA%\Docker\wsl`) → `docker builder prune` để xoá build cache, hoặc Docker Desktop → *Settings → Resources → Advanced → Disk image location* chuyển sang ổ khác |
+| dbt lỗi `could not resize shared memory segment ... No space left on device` | Container postgres tạo trước khi có `shm_size: 512mb` → `docker compose up -d postgres` (tạo lại container, dữ liệu trong volume giữ nguyên) |
 | Airflow container thoát ngay | `docker compose logs airflow`; thường do DB `airflow` chưa có (volume cũ) → tạo bằng `docker compose exec postgres createdb -U olist airflow` |

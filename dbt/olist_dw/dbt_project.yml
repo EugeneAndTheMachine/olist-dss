@@ -9,6 +9,8 @@ macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 test-paths: ["tests"]
 target-path: "target"
+# Airflow (Docker trên Windows) cài package vào thư mục trong container: giải nén lên bind mount NTFS bị thiếu file
+packages-install-path: "{{ env_var('DBT_PACKAGES_INSTALL_PATH', 'dbt_packages') }}"
 clean-targets: ["target", "dbt_packages"]
 
 vars:
@@ -27,6 +29,9 @@ models:
     +persist_docs:
       relation: true
       columns: true
+    # Bảng vừa tạo chưa có statistics → planner chọn join tệ (fact_order_fulfillment > 10 phút thay vì < 1 giây)
+    +post-hook:
+      - "{% if config.get('materialized') in ('table', 'incremental') %}analyze {{ this }}{% endif %}"
     staging:
       +schema: stg
       +materialized: table

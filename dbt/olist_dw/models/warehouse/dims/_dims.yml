@@ -1,6 +1,6 @@
 version: 2
 
-# TV2 (S4–S7) bổ sung: dim_geography, dim_product, dim_customer, dim_payment_type, dim_seller, dim_lead_*
+# S4 xong 01/11; dim_seller là bản tạm Type 1 (S6 thay SCD2). Còn: dim_lead_* (S5)
 models:
   - name: dim_date
     description: "1 dòng / ngày 2016-01-01 → 2019-12-31, khoá YYYYMMDD; dòng -1 cho sự kiện chưa xảy ra."
@@ -51,3 +51,172 @@ models:
               values: ["Completed", "Open", "Cancelled", "Unknown"]
       - name: counts_as_sale
         description: "Đơn được tính vào GMV / Orders"
+
+  - name: dim_geography
+    description: >
+      1 dòng / zip prefix 5 số (star, không snowflake). Role-playing: customer geo, seller geo.
+      Tập zip = geolocation ∪ customers ∪ sellers; zip không có trong geolocation → lat/lng null, city/state lấy từ customers/sellers.
+    columns:
+      - name: geo_key
+        description: "Surrogate key (băm từ zip_prefix); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: zip_prefix
+        description: "Zip prefix 5 số (natural key)"
+        data_tests: [unique, not_null]
+      - name: city
+        description: "Thành phố (lower, bỏ dấu)"
+      - name: state_code
+        description: "Mã bang 2 ký tự"
+        data_tests: [not_null]
+      - name: state_name
+        description: "Tên bang"
+      - name: region_name
+        description: "Vùng: Norte, Nordeste, Sudeste, Sul, Centro-Oeste"
+        data_tests: [not_null]
+      - name: latitude
+        description: "Vĩ độ trung bình các điểm hợp lệ của zip"
+      - name: longitude
+        description: "Kinh độ trung bình các điểm hợp lệ của zip"
+      - name: ibge_state_id
+        description: "Mã bang IBGE 2 chữ số (seed br_state_population)"
+      - name: state_population
+        description: "Dân số bang ước tính 2018 — dùng cho KPI theo đầu người"
+      - name: in_geolocation
+        description: "Zip có trong bảng geolocation gốc"
+
+  - name: dim_product
+    description: "1 dòng / product_id. Hierarchy product → category → category_group. Type 1."
+    columns:
+      - name: product_key
+        description: "Surrogate key (băm từ product_id); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: product_id
+        description: "Mã sản phẩm (natural key)"
+        data_tests: [unique, not_null]
+      - name: category_pt
+        description: "Category tiếng Bồ Đào Nha; 'unknown' khi thiếu"
+        data_tests: [not_null]
+      - name: category_en
+        description: "Category tiếng Anh; thiếu bản dịch → giữ tên PT"
+        data_tests: [not_null]
+      - name: category_group
+        description: "Nhóm ngành (seed category_group) — mức Commerce ra quyết định đầu tư"
+        data_tests: [not_null]
+      - name: photos_qty
+        description: "Số ảnh"
+      - name: name_length
+        description: "Số ký tự tên sản phẩm"
+      - name: description_length
+        description: "Số ký tự mô tả"
+      - name: weight_g
+        description: "Cân nặng (g)"
+      - name: length_cm
+        description: "Dài (cm)"
+      - name: height_cm
+        description: "Cao (cm)"
+      - name: width_cm
+        description: "Rộng (cm)"
+      - name: volume_cm3
+        description: "Thể tích (cm³)"
+      - name: weight_band
+        description: "Dải cân nặng"
+        data_tests:
+          - accepted_values:
+              values: ["< 0.5 kg", "0.5–2 kg", "2–5 kg", "5–10 kg", ">= 10 kg", "Unknown"]
+      - name: size_band
+        description: "Dải thể tích"
+        data_tests:
+          - accepted_values:
+              values: ["< 1 L", "1–10 L", "10–50 L", ">= 50 L", "Unknown"]
+
+  - name: dim_customer
+    description: >
+      1 dòng / người mua thật (customer_unique_id). Type 1. Không chứa segment —
+      segment ML được nối ở bi.v_dim_customer để tránh vòng phụ thuộc dw ↔ ml.
+    columns:
+      - name: customer_key
+        description: "Surrogate key (băm từ customer_unique_id); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: "Mã người mua thật (natural key)"
+        data_tests: [unique, not_null]
+      - name: first_order_date_key
+        description: "Ngày đặt đơn đầu tiên (YYYYMMDD)"
+        data_tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: first_order_state
+        description: "Bang giao hàng của đơn đầu tiên"
+      - name: customer_geo_key
+        description: "Zip giao hàng của đơn đầu tiên"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geography')
+              field: geo_key
+      - name: order_count_lifetime
+        description: "Tổng số đơn (mọi trạng thái) của khách"
+
+  - name: dim_payment_type
+    description: "Junk dimension: payment_type × instalment_band (seed). Static."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [payment_type, instalment_band]
+    columns:
+      - name: payment_type_key
+        description: "Surrogate key (băm từ payment_type + instalment_band); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: payment_type
+        description: "Hình thức thanh toán"
+        data_tests: [not_null]
+      - name: instalment_band
+        description: "Dải số kỳ: 1, 2-3, 4-6, 7-10, 11+"
+        data_tests: [not_null]
+      - name: min_instalments
+        description: "Số kỳ nhỏ nhất của dải"
+      - name: max_instalments
+        description: "Số kỳ lớn nhất của dải"
+      - name: is_instalment
+        description: "Trả góp (> 1 kỳ)"
+      - name: instalment_band_sort
+        description: "Thứ tự hiển thị dải"
+
+  - name: dim_seller
+    description: >
+      BẢN TẠM Type 1 (1 version / seller, tier = Unscored) để fact có seller_key; S6 thay bằng SCD2 trên seller_tier.
+      Cấu trúc đã theo SCD2 (valid_from, valid_to, is_current; key băm từ seller_id + valid_from) nên fact không phải sửa.
+      Tập seller = sellers ∪ closed_deals.seller_id.
+    columns:
+      - name: seller_key
+        description: "Surrogate key (băm từ seller_id + valid_from); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: seller_id
+        description: "Mã seller (natural key)"
+        data_tests: [not_null]
+      - name: seller_geo_key
+        description: "Zip của seller; -1 cho seller chỉ có trong funnel"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geography')
+              field: geo_key
+      - name: seller_tier
+        description: "New, Bronze, Silver, Gold, At-risk, Unscored (bản tạm: Unscored)"
+        data_tests:
+          - accepted_values:
+              values: ["New", "Bronze", "Silver", "Gold", "At-risk", "Unscored"]
+      - name: tier_rule_version
+        description: "Phiên bản rule chấm tier (seed seller_tier_rules)"
+      - name: valid_from
+        description: "Ngày bắt đầu hiệu lực của version"
+        data_tests: [not_null]
+      - name: valid_to
+        description: "Ngày hết hiệu lực (9999-12-31 = đang hiệu lực)"
+        data_tests: [not_null]
+      - name: is_current
+        description: "Version hiện hành"
+      - name: has_sales
+        description: "Seller có ít nhất 1 item đã bán"
+      - name: is_from_funnel
+        description: "Seller đến từ marketing funnel (có trong closed_deals)"

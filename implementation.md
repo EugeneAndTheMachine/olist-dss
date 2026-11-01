@@ -42,11 +42,11 @@ Olist là "marketplace của các marketplace" ở Brazil: seller đăng sản p
 | Design | Thử phương án bằng what-if | Power BI What-if parameters + bảng kịch bản tính sẵn trong schema `ml` |
 | Choice | Đề xuất để con người chấp nhận / bác bỏ | `ml.recommendations` (action + rationale + score), trang Recommendations trên Power BI; ghi nhận quyết định ở `meta.decision_log` (COULD) |
 
-### 1.3 Lưu ý khả thi (phải xác nhận ở profiling S1, rồi sửa mục này)
+### 1.3 Lưu ý khả thi (đã xác nhận ở profiling S1 ngày 01/11, số liệu: `docs/profiling.md`)
 
-- **Lặp mua rất thấp**: phần lớn `customer_unique_id` chỉ có 1 đơn → mô hình "giữ chân khách" sẽ yếu. CRM được đặt lại thành: phân khúc theo RFM + trải nghiệm (giao trễ, review thấp) và phân bổ voucher theo **giả định uplift** (tham số what-if), không phải uplift học từ dữ liệu.
-- **Funnel**: chỉ ~842 deal chốt trên ~8k MQL. Thuộc tính profile (business_segment, lead_type, …) **chỉ tồn tại cho lead đã chốt** → không được dùng làm feature dự đoán conversion. Số seller chốt deal có đơn hàng trong dataset e-commerce có thể ít, cửa sổ quan sát sau khi chốt ngắn → `gmv_first_90_days` có thể thưa.
-- **Chuỗi thời gian**: đơn hàng 2016 rất thưa, các tháng cuối 2018 bị cắt. Cửa sổ phân tích mặc định 2017-01-01 → 2018-08-31 (xác nhận ở S1). Forecast chỉ có ~20 điểm tháng → dùng mô hình đơn giản + baseline.
+- **Lặp mua rất thấp** (đã đo: 3,12% khách có ≥ 2 đơn): phần lớn `customer_unique_id` chỉ có 1 đơn → mô hình "giữ chân khách" sẽ yếu. CRM được đặt lại thành: phân khúc theo RFM + trải nghiệm (giao trễ, review thấp) và phân bổ voucher theo **giả định uplift** (tham số what-if), không phải uplift học từ dữ liệu.
+- **Funnel** (đã đo: 380 / 842 seller chốt deal có đơn hàng; won_date kéo tới 2018-11-14, chỉ 667 deal có đủ cửa sổ 90 ngày trước ANALYSIS_END): chỉ ~842 deal chốt trên ~8k MQL. Thuộc tính profile (business_segment, lead_type, …) **chỉ tồn tại cho lead đã chốt** → không được dùng làm feature dự đoán conversion. Số seller chốt deal có đơn hàng trong dataset e-commerce có thể ít, cửa sổ quan sát sau khi chốt ngắn → `gmv_first_90_days` có thể thưa.
+- **Chuỗi thời gian**: đơn hàng 2016 rất thưa (329 đơn, tháng 11/2016 trống), 09–10/2018 chỉ 20 đơn. Cửa sổ phân tích 2017-01-01 → 2018-08-31 (đã xác nhận ở S1, chứa 99,6% đơn). Forecast chỉ có ~20 điểm tháng → dùng mô hình đơn giản + baseline.
 
 ---
 
@@ -361,7 +361,7 @@ Snowflake comparison (chỉ trong báo cáo): giữ `dim_geography` dạng star;
 | fact_order_fulfillment | purchase_date_key, approved_date_key, carrier_date_key, delivered_date_key, estimated_date_key, customer_key, primary_seller_key, customer_geo_key, seller_geo_key, order_status_key | order_id | Additive: item_count, order_value, freight_total, is_delivered, is_late, is_dispatch_late. Lags (ngày): approval_lag, dispatch_lag, transit_lag, delivery_lag, promised_lag, delay_days — additive nhưng luôn báo cáo = tổng / số đơn đã giao. Non-additive: seller_customer_distance_km (haversine) |
 | fact_review | review_creation_date_key, review_answer_date_key, customer_key, primary_seller_key, customer_geo_key, order_status_key | review_id, order_id | review_count, score_sum (additive; avg = score_sum/review_count), is_low_score (≤2), has_comment, comment_length, response_hours. review_score đơn lẻ non-additive. `is_latest_for_order` = review dùng cho KPI |
 | fact_payment | purchase_date_key, customer_key, payment_type_key, order_status_key | order_id, payment_sequential | payment_value, payment_count: additive; instalments: non-additive |
-| fact_lead_funnel | first_contact_date_key, won_date_key, first_sale_date_key, lead_origin_key, lead_profile_key, sales_rep_key, seller_key | mql_id | lead_count, is_won, days_to_close, declared_catalog_size, declared_monthly_revenue (additive, tự khai → độ tin thấp), gmv_first_90_days (Σ item_price của seller trong 90 ngày kể từ won_date). Key = -1 khi sự kiện chưa xảy ra |
+| fact_lead_funnel | first_contact_date_key, won_date_key, first_sale_date_key, lead_origin_key, lead_profile_key, sales_rep_key, seller_key | mql_id | lead_count, is_won, days_to_close, declared_catalog_size, declared_monthly_revenue (additive, tự khai → độ tin thấp), gmv_first_90_days (Σ item_price của seller trong 90 ngày kể từ won_date), has_full_90d_window (won_date + 90 ≤ ANALYSIS_END; chỉ so kênh trên các lead có cờ này). Key = -1 khi sự kiện chưa xảy ra |
 | fact_seller_month | month_date_key (ngày đầu tháng), seller_key (version hợp lệ cuối tháng), seller_geo_key | — | Additive: orders, items, gmv, delivered_orders, late_orders, cancelled_orders, review_count, score_sum. Semi-additive: is_active (cộng qua seller, không cộng qua tháng). Non-additive: distinct_customers. Dòng dày đặc từ tháng bán đầu tiên của seller đến ANALYSIS_END |
 | fact_seller_product_activity | month_date_key, seller_key, product_key | — | Không measure; đếm dòng = số listing hoạt động |
 
@@ -400,15 +400,15 @@ Lags (ngày, dạng numeric có phần lẻ): approval_lag = approved − purcha
 ## 9. Staging rules (S3) — xác nhận từng rule ở profiling S1
 
 - **Chung**: trim text, chuẩn hoá chuỗi rỗng → null, ép kiểu, zip prefix `lpad(zip, 5, '0')`, dedup theo natural key lấy `_loaded_at` mới nhất (hỗ trợ replay/append).
-- **Orders**: parse timestamps; dẫn xuất is_delivered, is_late, delay_days; delivered date < purchase date → set null và log vào `stg.dq_rejects` (hoặc cờ `_dq_issue`).
+- **Orders**: parse timestamps; dẫn xuất is_delivered, is_late, delay_days; delivered date < purchase date → set null và log vào `stg.dq_rejects` (hoặc cờ `_dq_issue`). S1: không có dòng nào delivered < purchase, nhưng 1 359 đơn carrier < approved, 166 đơn carrier < purchase, 23 đơn delivered < carrier → giữ timestamp, gắn `_dq_issue`, lag âm tương ứng = null.
 - **Order items**: ép numeric price/freight; shipping_limit_date timestamp.
 - **Reviews**: giữ mọi dòng; `is_latest_for_order` theo review_answer_timestamp (hoà → review_creation_date, rồi review_id); review_id xuất hiện ở nhiều đơn → giữ, khoá fact là (review_id, order_id).
 - **Payments**: payment_installments 0 → 1; ghi nhận các dòng payment_type `not_defined`.
 - **Customers**: map customer_id → customer_unique_id (`int_customer_map`).
 - **Geolocation**: gộp về 1 dòng / zip prefix (mean lat/lng, city & state xuất hiện nhiều nhất), bỏ dấu (unidecode/`unaccent` extension) + lower case, loại điểm ngoài bounding box Brazil (lat −34 → 5.5; lng −74 → −34).
-- **Products**: category null → `unknown`; join translation (category thiếu bản dịch → giữ tên PT); sửa cột `lenght` → `length`; volume_cm3 = L×H×W; weight_band, size_band theo seed hoặc CASE.
+- **Products**: category null → `unknown`; join translation (category thiếu bản dịch → giữ tên PT); weight_g = 0 → null; sửa cột `lenght` → `length`; volume_cm3 = L×H×W; weight_band, size_band theo seed hoặc CASE.
 - **States/cities**: khớp mã bang 2 ký tự Olist với `state_code` của `br_states` và seed `br_state_population`; bỏ dấu tên city (city lấy từ geolocation/customers/sellers, không có danh mục municipality).
-- **Funnel**: parse dates, dedup theo mql_id, test tỷ lệ khớp seller_id với sellers; average_stock → stock_band.
+- **Funnel**: parse dates, dedup theo mql_id, test tỷ lệ khớp seller_id với sellers (S1: 45,1%); origin null → `unknown`; average_stock → stock_band.
 - **Holidays**: `stg_br_holidays(date, holiday_name)`.
 
 Intermediate models (schema `stg`): `int_customer_map`, `int_order_primary_seller`, `int_order_agg` (item_count, order_value, freight_total, max shipping_limit), `int_seller_month_metrics`, `int_seller_tier_monthly`, `int_seller_tier_versions`.
@@ -553,36 +553,36 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 
 ### P — Data Platform, Ingestion, Orchestration (TV1 — Ngọc Cẩn)
 - [x] P1 MUST Repo skeleton, .gitignore, .env.example, Makefile, README quickstart
-- [~] P2 MUST docker-compose (postgres + init SQL schemas/meta/ml, azurite); Airflow service (SHOULD)
-- [~] P3 MUST download_kaggle.py (2 dataset → landing local, extract_date)
-- [~] P4 MUST gen_holidays.py (IBGE API đã bỏ, bang/vùng từ br_states.csv)
-- [~] P5 MUST upload_to_lake.py, load_raw.py (COPY text + metadata cols + etl_run_log)
-- [~] P6 SHOULD Airflow DAG olist_pipeline + Dockerfile (dbt venv)
+- [x] P2 MUST docker-compose (postgres + init SQL schemas/meta/ml, azurite); Airflow service (SHOULD)
+- [~] P3 MUST download_kaggle.py (2 dataset → landing local, extract_date) — đường data/raw chạy được; nhánh Kaggle API chưa test
+- [x] P4 MUST gen_holidays.py (IBGE API đã bỏ, bang/vùng từ br_states.csv)
+- [x] P5 MUST upload_to_lake.py, load_raw.py (COPY text + metadata cols + etl_run_log)
+- [x] P6 SHOULD Airflow DAG olist_pipeline + Dockerfile (dbt venv) — 15/15 task success (01/11); chạy lại khi có model/ML thật
 - [ ] P7 SHOULD replay_month.py (+ cùng F8)
 - [~] P8 MUST meta_publish.py (dq_results, data_dictionary, source_to_target), DDL meta.*
 - [ ] P9 MUST dbt docs + lineage figure; `make all` chạy sạch trên máy mới
 
 ### S — Staging, Dimensions, Data Quality (TV2 — Minh Hiếu)
-- [ ] S1 MUST Profiling → docs/profiling.md (xác nhận mục 1.3, 7.4 seed, 9, tolerance item vs payment)
-- [~] S2 MUST dbt project init, sources.yml, macros (generate_schema_name, int_sk), seeds
-- [ ] S3 MUST stg_* cho 11 file + br_states + calendar_events + holidays; int_customer_map
-- [ ] S4 MUST dim_date, dim_geography, dim_product, dim_customer, dim_order_status, dim_payment_type
+- [x] S1 MUST Profiling → docs/profiling.md (xác nhận mục 1.3, 7.4 seed, 9, tolerance item vs payment) — 01/11, query ở docs/profiling.sql
+- [x] S2 MUST dbt project init, sources.yml, macros (generate_schema_name, int_sk, cleaning, haversine/lag_days), seeds
+- [x] S3 MUST stg_* cho 11 file + br_states + calendar_events + holidays; int_customer_map — 01/11
+- [x] S4 MUST dim_date, dim_geography, dim_product, dim_customer, dim_order_status, dim_payment_type — 01/11
 - [ ] S5 SHOULD dim_lead_origin, dim_lead_profile, dim_sales_rep, fact_lead_funnel
-- [ ] S6 SHOULD int_seller_month_metrics, int_seller_tier_monthly, int_seller_tier_versions, dim_seller SCD2 (MUST: bản Type 1 tạm trước để F không bị chặn)
-- [ ] S7 MUST tests dims + business-rule tests + YAML dictionary cho dims
+- [~] S6 SHOULD int_seller_month_metrics, int_seller_tier_monthly, int_seller_tier_versions, dim_seller SCD2 (MUST: bản Type 1 tạm trước để F không bị chặn) — bản tạm xong 01/11 (cấu trúc SCD2, tier Unscored, key = int_sk(seller_id, valid_from)); còn SCD2 thật
+- [~] S7 MUST tests dims + business-rule tests + YAML dictionary cho dims — YAML + test key/FK/accepted_values cho stg và dims, 2 test SCD2 (1 version current, không chồng lấn); còn test point-in-time khi có SCD2
 
 ### F — Facts, BI marts, Power BI (TV3 — Xuân Vinh)
-- [ ] F1 MUST int_order_primary_seller, int_order_agg
-- [ ] F2 MUST fact_order_item, fact_payment
-- [ ] F3 MUST fact_order_fulfillment (accumulating, lags, distance), fact_review
+- [x] F1 MUST int_order_primary_seller, int_order_agg — 01/11
+- [x] F2 MUST fact_order_item, fact_payment — 01/11
+- [x] F3 MUST fact_order_fulfillment (accumulating, lags, distance), fact_review — 01/11; late rate 6,77% khớp profiling
 - [ ] F4 SHOULD fact_seller_month; COULD fact_seller_product_activity
-- [ ] F5 MUST reconciliation tests + YAML facts
+- [~] F5 MUST reconciliation tests + YAML facts — YAML facts, equal_rowcount stg↔fact, Σ tiền stg = fact, item vs payment (tolerance A5, warn), tỷ lệ key -1 < 1% (warn); còn Σ fact_seller_month = Σ fact_order_item (chờ F4)
 - [ ] F6 MUST schema bi views + docs/kpi_dictionary.md
 - [ ] F7 MUST Power BI semantic model + DAX measures + trang 1, 3, 5, 6, 8
 - [ ] F8 SHOULD incremental models (cùng P7)
 
 ### M — ML & Decision Support (TV4 — Trường An)
-- [ ] M1 MUST EDA + kiểm tra khả thi trên CSV (repeat rate, funnel match, chuỗi thời gian)
+- [~] M1 MUST EDA + kiểm tra khả thi trên CSV (repeat rate, funnel match, chuỗi thời gian) — số liệu khả thi đã có trong docs/profiling.md (A6–A8, phát hiện 1, 4); còn notebook EDA + kết luận cho từng bài toán ML
 - [~] M2 MUST ml/common (db io, registry, model_run_id), DDL ml.*
 - [ ] M3 MUST late-risk model + ml.promise_whatif
 - [ ] M4 MUST CRM segmentation + voucher allocation (PuLP)
@@ -601,15 +601,19 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 
 | # | Giả định | Trạng thái |
 | --- | --- | --- |
-| A1 | Danh sách order_status và payment_type như mục 7.4 / 9 | chưa xác nhận |
-| A2 | review_id trùng trên nhiều order và order có nhiều review | chưa xác nhận |
-| A3 | Geolocation nhiều điểm / zip, có điểm ngoài Brazil, city có dấu không đồng nhất | chưa xác nhận |
-| A4 | Có product thiếu category / thiếu bản dịch | một phần: `pc_gamer`, `portateis_cozinha_e_preparadores_de_alimentos` không có trong bảng dịch; category rỗng chưa đếm |
-| A5 | Chênh lệch Σ item_total vs Σ payment_value theo đơn → tolerance | chưa đo |
-| A6 | Tỷ lệ seller_id closed_deals khớp sellers | chưa đo |
-| A7 | Tỷ lệ khách mua lặp lại | chưa đo |
-| A8 | Cửa sổ phân tích 2017-01-01 → 2018-08-31 | chưa xác nhận |
-| A9 | Zip prefix trong CSV có mất số 0 đầu hay không | chưa xác nhận |
+Đã đo ở S1 (01/11/2026), chi tiết và query: `docs/profiling.md`, `docs/profiling.sql`.
+
+| # | Giả định | Trạng thái |
+| --- | --- | --- |
+| A1 | Danh sách order_status và payment_type như mục 7.4 / 9 | **xác nhận**: 8 status khớp seed; 5 payment_type gồm `not_defined` (3 dòng, đơn canceled, value 0); installments 0 ở 2 dòng → 1; tối đa 24 kỳ |
+| A2 | review_id trùng trên nhiều order và order có nhiều review | **xác nhận**: 789 review_id trên > 1 đơn; 547 đơn > 1 review (202 khác điểm); 768 đơn không review |
+| A3 | Geolocation nhiều điểm / zip, có điểm ngoài Brazil, city có dấu không đồng nhất | **xác nhận**: ~52,6 điểm/zip; 42 điểm (21 zip) ngoài bbox, 5 zip toàn bộ ngoài → lat/lng null; 8 zip > 1 bang → mode; 8 011 → 5 969 city sau unaccent; 157 zip khách + 7 seller không có trong geolocation |
+| A4 | Có product thiếu category / thiếu bản dịch | **xác nhận**: 610 product (1 603 item) thiếu category → `unknown`; 13 product thuộc 2 category thiếu bản dịch → giữ tên PT; 4 product weight 0 → null |
+| A5 | Chênh lệch Σ item_total vs Σ payment_value theo đơn → tolerance | **chốt tolerance** max(1 BRL, 1% item_total), severity warn → 99,75% đơn đạt; 775 đơn không có item, 1 đơn không có payment |
+| A6 | Tỷ lệ seller_id closed_deals khớp sellers | **45,1%** (380 / 842), cả 380 có đơn; 667 deal đủ cửa sổ 90 ngày → thêm `has_full_90d_window` |
+| A7 | Tỷ lệ khách mua lặp lại | **3,12%** (2 997 / 96 096) → giữ hướng CRM mục 1.3 |
+| A8 | Cửa sổ phân tích 2017-01-01 → 2018-08-31 | **xác nhận**: 20 tháng liên tục, 99 092 đơn (99,6%) |
+| A9 | Zip prefix trong CSV có mất số 0 đầu hay không | **không mất** (raw là text, 23 995 zip khách bắt đầu bằng 0); vẫn giữ `lpad` phòng hờ |
 
 ---
 
@@ -619,6 +623,8 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - 2026-10-30: Chốt PostgreSQL thay BigQuery; dbt thay Spark; thêm MinIO làm data lake; Airflow chỉ điều phối.
 - 2026-11-01: Thay MinIO (ngừng phát hành image community) bằng Azure Blob Storage: Azurite khi dev, ADLS Gen2 (Azure for Students) khi demo. boto3 → azure-storage-blob; env `MINIO_*`/`LAKE_BUCKET` → `AZURE_STORAGE_CONNECTION_STRING`/`LAKE_CONTAINER`.
 - 2026-11-01: Bỏ IBGE Localidades API (chặn IP ngoài Brazil). Bang & vùng từ `data/raw/events_brazilstates/br_states.csv`; `ibge_state_id` thêm vào seed `br_state_population`; bỏ `raw.ibge_states`, `raw.ibge_municipalities`, `fetch_ibge.py`, `data/fallback/`. raw còn 14 bảng.
+- 2026-11-01: Cờ trong fact (is_delivered, is_late, is_dispatch_late, is_low_score, has_comment) lưu dạng integer 0/1 để cộng trực tiếp; thêm `fact_order_fulfillment.has_carrier_date` làm mẫu số dispatch late rate. `order_value` = Σ price (không gồm ship), cùng cơ sở với GMV. Postgres container `shm_size: 512mb` (mặc định 64 MB làm lỗi join song song khi build fact).
+- 2026-11-01: Sau profiling S1: chốt tolerance đối soát item vs payment = max(1 BRL, 1%); lag âm → null + `_dq_issue`; weight 0 → null; origin null → `unknown`; thêm `fact_lead_funnel.has_full_90d_window` (won_date kéo dài sau ANALYSIS_END).
 - 2026-10-30: Segment khách chuyển từ dw.dim_customer sang bi.v_dim_customer (tránh vòng dw ↔ ml).
 - 2026-10-30: Surrogate key băm từ natural key (ổn định cho incremental).
 - 2026-10-30: dim_seller gồm cả seller từ closed_deals chưa có doanh số (has_sales, is_from_funnel); thêm tier Unscored.

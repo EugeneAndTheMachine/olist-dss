@@ -1,16 +1,21 @@
 version: 2
 
-# Mẫu YAML cho staging. Mọi model mới: description cho model + từng cột, test key.
+# Staging (Silver): dedup theo natural key (bản _loaded_at mới nhất) → ép kiểu → rule làm sạch (implementation.md mục 9).
+# Con số trong mô tả lấy từ profiling S1 (docs/profiling.md).
 models:
   - name: stg_orders
-    description: "Đơn hàng đã dedup (bản _loaded_at mới nhất), ép kiểu, dẫn xuất cờ giao hàng. 1 dòng / order_id."
+    description: "Đơn hàng đã dedup, ép kiểu, dẫn xuất cờ giao hàng. 1 dòng / order_id."
     columns:
       - name: order_id
         description: "Mã đơn (natural key)"
         data_tests: [unique, not_null]
       - name: customer_id
         description: "Mã khách theo đơn (Olist cấp mới mỗi đơn) — map sang customer_unique_id ở int_customer_map"
-        data_tests: [not_null]
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('int_customer_map')
+              field: customer_id
       - name: order_status
         description: "Trạng thái đơn (lower case)"
         data_tests:
@@ -22,15 +27,17 @@ models:
         description: "Thời điểm mua"
         data_tests: [not_null]
       - name: order_approved_at
-        description: "Thời điểm duyệt thanh toán"
+        description: "Thời điểm duyệt thanh toán (S1: 160 đơn null)"
       - name: order_delivered_carrier_date
         description: "Thời điểm giao cho hãng vận chuyển"
       - name: order_delivered_customer_date
         description: "Thời điểm khách nhận; null nếu chưa giao hoặc lỗi giao trước ngày mua"
       - name: order_estimated_delivery_date
-        description: "Ngày hứa giao"
+        description: "Ngày hứa giao (luôn 00:00, so sánh theo ngày)"
       - name: _dq_issue
-        description: "Mã lỗi chất lượng dữ liệu nếu có (delivered_before_purchase)"
+        description: >
+          Danh sách lỗi mốc thời gian, phân cách bằng dấu phẩy: delivered_before_purchase (ngày giao bị null),
+          carrier_before_purchase, carrier_before_approved, delivered_before_carrier (giữ timestamp, lag âm được null ở fact)
       - name: _batch_id
         description: "Batch nạp raw"
       - name: _loaded_at
@@ -38,9 +45,359 @@ models:
       - name: is_delivered
         description: "order_status = delivered và có ngày khách nhận"
       - name: is_late
-        description: "is_delivered và delivered::date > estimated::date"
+        description: "is_delivered và delivered::date > estimated::date (định nghĩa KPI mục 8)"
       - name: delay_days
         description: "delivered::date − estimated::date (âm = sớm); chỉ khi is_delivered"
+
+  - name: stg_order_items
+    description: "Item của đơn. 1 dòng / (order_id, order_item_id)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [order_id, order_item_id]
+    columns:
+      - name: order_id
+        description: "Mã đơn"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
+      - name: order_item_id
+        description: "Số thứ tự item trong đơn (1, 2, …)"
+        data_tests: [not_null]
+      - name: product_id
+        description: "Mã sản phẩm"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_products')
+              field: product_id
+      - name: seller_id
+        description: "Mã seller bán item này"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_sellers')
+              field: seller_id
+      - name: shipping_limit_date
+        description: "Hạn seller phải giao cho hãng vận chuyển; null nếu ngoài phạm vi dim_date (4 item có năm 2020)"
+      - name: price
+        description: "Giá item (BRL)"
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: freight_value
+        description: "Phí vận chuyển phân bổ cho item (BRL); S1: 383 item = 0"
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: item_total
+        description: "price + freight_value"
+      - name: _dq_issue
+        description: "shipping_limit_out_of_range khi hạn giao gốc nằm ngoài 2016–2019"
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_order_payments
+    description: "Lần thanh toán của đơn. 1 dòng / (order_id, payment_sequential)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [order_id, payment_sequential]
+    columns:
+      - name: order_id
+        description: "Mã đơn"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
+      - name: payment_sequential
+        description: "Thứ tự lần thanh toán trong đơn"
+        data_tests: [not_null]
+      - name: payment_type
+        description: "Hình thức thanh toán; not_defined giữ nguyên (S1: 3 dòng, đơn canceled, value 0)"
+        data_tests:
+          - accepted_values:
+              values: ["credit_card", "boleto", "voucher", "debit_card", "not_defined"]
+      - name: payment_installments
+        description: "Số kỳ trả góp; giá trị 0 được sửa thành 1 (S1: 2 dòng)"
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+      - name: payment_value
+        description: "Số tiền (BRL)"
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: _dq_issue
+        description: "installments_fixed_to_1 khi số kỳ gốc là 0 / null"
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_order_reviews
+    description: >
+      Review của đơn. Khoá (review_id, order_id) vì review_id có thể gắn nhiều đơn (S1: 789 review_id);
+      đơn có thể có nhiều review (547 đơn) → KPI chỉ dùng is_latest_for_order.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [review_id, order_id]
+    columns:
+      - name: review_id
+        description: "Mã review"
+        data_tests: [not_null]
+      - name: order_id
+        description: "Mã đơn"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_orders')
+              field: order_id
+      - name: review_score
+        description: "Điểm 1–5"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+              quote: false
+      - name: review_comment_title
+        description: "Tiêu đề bình luận"
+      - name: review_comment_message
+        description: "Nội dung bình luận"
+      - name: review_creation_date
+        description: "Ngày gửi khảo sát review"
+      - name: review_answer_timestamp
+        description: "Thời điểm khách trả lời"
+      - name: has_comment
+        description: "Có tiêu đề hoặc nội dung bình luận"
+      - name: comment_length
+        description: "Số ký tự nội dung bình luận (0 nếu không có)"
+      - name: is_low_score
+        description: "review_score ≤ 2"
+      - name: response_hours
+        description: "Số giờ từ khi gửi khảo sát tới khi khách trả lời"
+      - name: is_latest_for_order
+        description: "Review dùng cho KPI của đơn: answer mới nhất → creation mới nhất → review_id"
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_customers
+    description: "Khách theo đơn. 1 dòng / customer_id; city bỏ dấu, zip 5 số."
+    columns:
+      - name: customer_id
+        description: "Mã khách theo đơn"
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: "Mã người mua thật (S1: 96 096 người / 99 441 customer_id)"
+        data_tests: [not_null]
+      - name: customer_zip_prefix
+        description: "Zip prefix 5 số"
+        data_tests: [not_null]
+      - name: customer_city
+        description: "Thành phố (lower, bỏ dấu)"
+      - name: customer_state
+        description: "Mã bang 2 ký tự"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_br_states')
+              field: state_code
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_sellers
+    description: "Seller có trong dataset e-commerce. 1 dòng / seller_id."
+    columns:
+      - name: seller_id
+        description: "Mã seller"
+        data_tests: [unique, not_null]
+      - name: seller_zip_prefix
+        description: "Zip prefix 5 số"
+        data_tests: [not_null]
+      - name: seller_city
+        description: "Thành phố (lower, bỏ dấu)"
+      - name: seller_state
+        description: "Mã bang 2 ký tự"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_br_states')
+              field: state_code
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_products
+    description: "Sản phẩm. 1 dòng / product_id; category null → 'unknown', weight 0 → null, sửa *_lenght → *_length."
+    columns:
+      - name: product_id
+        description: "Mã sản phẩm"
+        data_tests: [unique, not_null]
+      - name: product_category_name
+        description: "Category tiếng Bồ Đào Nha; 'unknown' khi thiếu (S1: 610 sản phẩm)"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('category_group')
+              field: product_category_name
+      - name: product_name_length
+        description: "Số ký tự tên sản phẩm"
+      - name: product_description_length
+        description: "Số ký tự mô tả"
+      - name: product_photos_qty
+        description: "Số ảnh"
+      - name: product_weight_g
+        description: "Cân nặng (g); 0 → null"
+      - name: product_length_cm
+        description: "Dài (cm)"
+      - name: product_height_cm
+        description: "Cao (cm)"
+      - name: product_width_cm
+        description: "Rộng (cm)"
+      - name: product_volume_cm3
+        description: "Thể tích = dài × cao × rộng"
+      - name: _dq_issue
+        description: "missing_category, zero_weight"
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_geolocation
+    description: >
+      1 dòng / zip prefix, gộp từ ~1M điểm: lat/lng = trung bình điểm trong bounding box Brazil,
+      city/state = giá trị xuất hiện nhiều nhất. Chỉ đọc batch nạp mới nhất.
+    columns:
+      - name: zip_prefix
+        description: "Zip prefix 5 số"
+        data_tests: [unique, not_null]
+      - name: city
+        description: "Thành phố phổ biến nhất của zip (lower, bỏ dấu)"
+      - name: state_code
+        description: "Bang phổ biến nhất của zip"
+        data_tests:
+          - relationships:
+              to: ref('stg_br_states')
+              field: state_code
+      - name: latitude
+        description: "Vĩ độ trung bình; null nếu mọi điểm nằm ngoài Brazil"
+      - name: longitude
+        description: "Kinh độ trung bình; null nếu mọi điểm nằm ngoài Brazil"
+      - name: n_points
+        description: "Số điểm gốc của zip"
+      - name: n_points_outside_brazil
+        description: "Số điểm bị loại vì nằm ngoài bounding box Brazil"
+
+  - name: stg_product_category_name_translation
+    description: "Bản dịch category PT → EN. Thiếu 2 category (S1 A4)."
+    columns:
+      - name: product_category_name
+        description: "Category tiếng Bồ Đào Nha"
+        data_tests: [unique, not_null]
+      - name: product_category_name_english
+        description: "Category tiếng Anh"
+
+  - name: stg_mql
+    description: "Marketing qualified lead. 1 dòng / mql_id."
+    columns:
+      - name: mql_id
+        description: "Mã lead"
+        data_tests: [unique, not_null]
+      - name: first_contact_date
+        description: "Ngày liên hệ đầu tiên"
+        data_tests: [not_null]
+      - name: landing_page_id
+        description: "Landing page lead đăng ký"
+      - name: origin
+        description: "Kênh marketing; null → 'unknown'"
+        data_tests: [not_null]
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_closed_deals
+    description: "Lead đã chốt thành seller. 1 dòng / mql_id. Thuộc tính profile chỉ tồn tại cho lead đã chốt."
+    columns:
+      - name: mql_id
+        description: "Mã lead"
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              to: ref('stg_mql')
+              field: mql_id
+      - name: seller_id
+        description: "Seller sau khi chốt (S1: chỉ 45,1% có trong sellers)"
+        data_tests: [not_null]
+      - name: sdr_id
+        description: "Sales development rep"
+      - name: sr_id
+        description: "Sales rep"
+      - name: won_date
+        description: "Thời điểm chốt deal"
+        data_tests: [not_null]
+      - name: business_segment
+        description: "Ngành hàng seller khai"
+      - name: lead_type
+        description: "Loại lead (online_medium, industry, …)"
+      - name: lead_behaviour_profile
+        description: "Hồ sơ hành vi (cat, eagle, wolf, shark; có thể kết hợp)"
+      - name: has_company
+        description: "Có pháp nhân (null = không khai)"
+      - name: has_gtin
+        description: "Sản phẩm có mã GTIN (null = không khai)"
+      - name: average_stock
+        description: "Dải tồn kho khai báo (1-5, 5-20, 20-50, 50-200, 200+, unknown)"
+      - name: business_type
+        description: "reseller / manufacturer / other"
+      - name: declared_product_catalog_size
+        description: "Số sản phẩm khai báo (tự khai, độ tin thấp)"
+      - name: declared_monthly_revenue
+        description: "Doanh thu tháng khai báo (tự khai, độ tin thấp)"
+      - name: _batch_id
+        description: "Batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp raw"
+
+  - name: stg_br_states
+    description: "27 bang Brazil với vùng (file nhóm chuẩn bị)."
+    columns:
+      - name: state_code
+        description: "Mã bang 2 ký tự"
+        data_tests: [unique, not_null]
+      - name: state_name
+        description: "Tên bang"
+      - name: region_name
+        description: "Vùng (5 vùng)"
+        data_tests: [not_null]
+
+  - name: stg_calendar_events
+    description: "Lịch sự kiện (lễ quốc gia, sự kiện bán lẻ) 2016–2019."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [event_date, event_name]
+    columns:
+      - name: event_date
+        description: "Ngày sự kiện"
+        data_tests: [not_null]
+      - name: event_name
+        description: "Tên sự kiện"
+      - name: event_type
+        description: "national_holiday / retail_event"
+        data_tests:
+          - accepted_values:
+              values: ["national_holiday", "retail_event"]
 
   - name: stg_br_holidays
     description: "Ngày lễ quốc gia Brazil, 1 dòng / ngày."

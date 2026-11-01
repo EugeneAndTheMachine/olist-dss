@@ -17,4 +17,11 @@ RUN python -m venv /opt/airflow/dbt_venv \
     && /opt/airflow/dbt_venv/bin/pip install --no-cache-dir \
        "dbt-core==${DBT_CORE_VERSION}" "dbt-postgres==${DBT_POSTGRES_VERSION}"
 
+# LightGBM cần OpenMP runtime (libgomp.so.1), image Airflow không có sẵn
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+USER airflow
+
 WORKDIR /opt/olist

@@ -1,0 +1,254 @@
+version: 2
+
+# F2, F3 (01/11). Còn: fact_seller_month, fact_seller_product_activity (F4), fact_lead_funnel (S5).
+# Đối soát (F5) ở tests/: assert_reconcile_*, assert_fact_unknown_key_share.
+
+models:
+  - name: fact_order_item
+    description: "Transaction fact — 1 dòng / item của đơn (order_id + order_item_id). Nguồn GMV."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [order_id, order_item_id]
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('stg_order_items')
+    columns:
+      - name: order_id
+        description: "Mã đơn (degenerate dimension)"
+        data_tests: [not_null]
+      - name: order_item_id
+        description: "Số thứ tự item trong đơn (degenerate dimension)"
+        data_tests: [not_null]
+      - name: purchase_date_key
+        description: "Ngày mua"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: shipping_limit_date_key
+        description: "Hạn seller giao cho hãng vận chuyển"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: customer_key
+        description: "Người mua"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: product_key
+        description: "Sản phẩm"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_product'), field: product_key}
+      - name: seller_key
+        description: "Version seller hiệu lực tại ngày mua"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: customer_geo_key
+        description: "Zip giao hàng của đơn (role: customer geography)"
+        data_tests:
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: seller_geo_key
+        description: "Zip của seller (role: seller geography)"
+        data_tests:
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: order_status_key
+        description: "Trạng thái đơn"
+        data_tests:
+          - relationships: {to: ref('dim_order_status'), field: order_status_key}
+      - name: item_price
+        description: "Giá item (BRL) — additive. GMV = Σ item_price với counts_as_sale"
+      - name: freight_value
+        description: "Phí vận chuyển (BRL) — additive"
+      - name: item_total
+        description: "item_price + freight_value — additive"
+      - name: item_count
+        description: "Luôn = 1 — additive"
+      - name: _dw_loaded_at
+        description: "Thời điểm build"
+
+  - name: fact_payment
+    description: "Transaction fact — 1 dòng / lần thanh toán (order_id + payment_sequential)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [order_id, payment_sequential]
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('stg_order_payments')
+    columns:
+      - name: order_id
+        description: "Mã đơn (degenerate dimension)"
+        data_tests: [not_null]
+      - name: payment_sequential
+        description: "Thứ tự lần thanh toán (degenerate dimension)"
+      - name: purchase_date_key
+        description: "Ngày mua"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: customer_key
+        description: "Người mua"
+        data_tests:
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: payment_type_key
+        description: "payment_type × instalment_band"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_payment_type'), field: payment_type_key}
+      - name: order_status_key
+        description: "Trạng thái đơn"
+        data_tests:
+          - relationships: {to: ref('dim_order_status'), field: order_status_key}
+      - name: payment_value
+        description: "Số tiền (BRL) — additive"
+      - name: payment_count
+        description: "Luôn = 1 — additive"
+      - name: payment_installments
+        description: "Số kỳ trả góp — non-additive (dùng trung bình)"
+      - name: _dw_loaded_at
+        description: "Thời điểm build"
+
+  - name: fact_order_fulfillment
+    description: >
+      Accumulating snapshot — 1 dòng / đơn, 5 vai trò ngày điền dần (-1 = chưa xảy ra).
+      Cố ý vi phạm tính non-updatable của fact → có _dw_loaded_at, _dw_updated_at.
+      Lags tính bằng ngày (có phần lẻ), lag âm do mốc ngược thứ tự → null. Báo cáo lag = Σ lag / số đơn có lag.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('stg_orders')
+    columns:
+      - name: order_id
+        description: "Mã đơn (degenerate dimension)"
+        data_tests: [unique, not_null]
+      - name: purchase_date_key
+        description: "Ngày mua"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: approved_date_key
+        description: "Ngày duyệt thanh toán"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: carrier_date_key
+        description: "Ngày giao cho hãng vận chuyển"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: delivered_date_key
+        description: "Ngày khách nhận"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: estimated_date_key
+        description: "Ngày hứa giao"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: customer_key
+        description: "Người mua"
+        data_tests:
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: primary_seller_key
+        description: "Seller của item giá cao nhất (hoà → seller_id nhỏ nhất); -1 cho đơn không có item"
+        data_tests:
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: customer_geo_key
+        description: "Zip giao hàng"
+        data_tests:
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: seller_geo_key
+        description: "Zip của primary seller"
+        data_tests:
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: order_status_key
+        description: "Trạng thái đơn"
+        data_tests:
+          - relationships: {to: ref('dim_order_status'), field: order_status_key}
+      - name: item_count
+        description: "Số item — additive"
+      - name: order_value
+        description: "Σ giá item, không gồm ship (BRL) — additive. AOV = Σ order_value / Orders"
+      - name: freight_total
+        description: "Σ phí ship (BRL) — additive"
+      - name: is_delivered
+        description: "1 nếu status = delivered và có ngày khách nhận"
+        data_tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: is_late
+        description: "1 nếu is_delivered và delivered::date > estimated::date. Late rate = Σ is_late / Σ is_delivered"
+        data_tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: is_dispatch_late
+        description: "1 nếu carrier_date > max(shipping_limit_date) của các item"
+      - name: has_carrier_date
+        description: "1 nếu đã giao cho hãng vận chuyển — mẫu số của dispatch late rate"
+      - name: approval_lag
+        description: "approved − purchase (ngày)"
+      - name: dispatch_lag
+        description: "carrier − approved (ngày); null nếu âm"
+      - name: transit_lag
+        description: "delivered − carrier (ngày); null nếu âm"
+      - name: delivery_lag
+        description: "delivered − purchase (ngày), chỉ khi is_delivered"
+      - name: promised_lag
+        description: "estimated − purchase (ngày)"
+      - name: delay_days
+        description: "delivered::date − estimated::date (âm = sớm), chỉ khi is_delivered"
+      - name: seller_customer_distance_km
+        description: "Khoảng cách haversine giữa tâm zip seller và zip khách — non-additive"
+      - name: _dq_issue
+        description: "Lỗi mốc thời gian kế thừa từ stg_orders"
+      - name: _dw_loaded_at
+        description: "Thời điểm dòng được nạp"
+      - name: _dw_updated_at
+        description: "Thời điểm dòng được cập nhật mốc gần nhất"
+
+  - name: fact_review
+    description: >
+      Transaction fact — 1 dòng / (review_id, order_id). KPI điểm review chỉ dùng is_latest_for_order.
+      review_score đơn lẻ non-additive → avg = Σ score_sum / Σ review_count.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [review_id, order_id]
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('stg_order_reviews')
+    columns:
+      - name: review_id
+        description: "Mã review (degenerate dimension)"
+        data_tests: [not_null]
+      - name: order_id
+        description: "Mã đơn (degenerate dimension)"
+        data_tests: [not_null]
+      - name: review_creation_date_key
+        description: "Ngày gửi khảo sát"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: review_answer_date_key
+        description: "Ngày khách trả lời"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: customer_key
+        description: "Người mua"
+        data_tests:
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: primary_seller_key
+        description: "Primary seller của đơn"
+        data_tests:
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: customer_geo_key
+        description: "Zip giao hàng"
+        data_tests:
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: order_status_key
+        description: "Trạng thái đơn"
+        data_tests:
+          - relationships: {to: ref('dim_order_status'), field: order_status_key}
+      - name: review_count
+        description: "Luôn = 1 — additive"
+      - name: review_score
+        description: "Điểm 1–5 — non-additive"
+      - name: score_sum
+        description: "= review_score, để cộng — additive"
+      - name: is_low_score
+        description: "1 nếu điểm ≤ 2"
+      - name: has_comment
+        description: "1 nếu có bình luận"
+      - name: comment_length
+        description: "Số ký tự bình luận"
+      - name: response_hours
+        description: "Giờ từ khi gửi khảo sát tới khi trả lời"
+      - name: is_latest_for_order
+        description: "Review dùng cho KPI của đơn"
+      - name: _dw_loaded_at
+        description: "Thời điểm build"

@@ -19,7 +19,11 @@ from airflow.operators.bash import BashOperator
 OLIST_HOME = os.environ.get("OLIST_HOME", "/opt/olist")
 DBT_DIR = "dbt/olist_dw"
 # dbt >= 1.5 chỉ nhận --project-dir/--profiles-dir sau subcommand → truyền bằng env
-DBT = f"DBT_PROJECT_DIR={DBT_DIR} DBT_PROFILES_DIR={DBT_DIR} /opt/airflow/dbt_venv/bin/dbt"
+# Package dbt cài trong container (/opt/airflow/dbt_packages), không ghi lên repo mount: xem dbt_project.yml
+DBT = (
+    f"DBT_PROJECT_DIR={DBT_DIR} DBT_PROFILES_DIR={DBT_DIR} "
+    "DBT_PACKAGES_INSTALL_PATH=/opt/airflow/dbt_packages /opt/airflow/dbt_venv/bin/dbt"
+)
 DBT_PROFILE = f"cp -n {DBT_DIR}/profiles.example.yml {DBT_DIR}/profiles.yml"
 
 

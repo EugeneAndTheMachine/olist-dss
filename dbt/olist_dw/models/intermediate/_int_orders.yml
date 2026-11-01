@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: int_order_primary_seller
+    description: "Primary seller của đơn: seller của item có price cao nhất; hoà → seller_id nhỏ nhất. 1 dòng / đơn có item."
+    columns:
+      - name: order_id
+        description: "Mã đơn"
+        data_tests: [unique, not_null]
+      - name: primary_seller_id
+        description: "Seller chính của đơn"
+        data_tests: [not_null]
+
+  - name: int_order_agg
+    description: "Tổng hợp item theo đơn. 1 dòng / đơn có item (S1: 775 đơn không có item)."
+    columns:
+      - name: order_id
+        description: "Mã đơn"
+        data_tests: [unique, not_null]
+      - name: item_count
+        description: "Số item"
+      - name: order_value
+        description: "Σ price (không gồm ship)"
+      - name: freight_total
+        description: "Σ freight_value"
+      - name: order_total
+        description: "Σ item_total (price + freight)"
+      - name: seller_count
+        description: "Số seller khác nhau trong đơn"
+      - name: max_shipping_limit_date
+        description: "Hạn giao cho hãng vận chuyển muộn nhất trong các item — mốc so sánh is_dispatch_late"
