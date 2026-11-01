@@ -1,6 +1,6 @@
 """DAG olist_pipeline (P6) — điều phối toàn bộ chuỗi, gọi cùng script/command với Makefile.
 
-[download_kaggle, copy_manual, fetch_ibge, gen_holidays] → upload_to_lake → load_raw
+[download_kaggle, copy_manual, gen_holidays] → upload_to_lake → load_raw
   → dbt_deps → dbt_seed → dbt_build
   → [ml_late_risk, ml_crm, ml_forecast, ml_seller_risk] → ml_recommendations
   → meta_publish → dbt_docs_generate
@@ -18,7 +18,8 @@ from airflow.operators.bash import BashOperator
 
 OLIST_HOME = os.environ.get("OLIST_HOME", "/opt/olist")
 DBT_DIR = "dbt/olist_dw"
-DBT = f"/opt/airflow/dbt_venv/bin/dbt --project-dir {DBT_DIR} --profiles-dir {DBT_DIR}"
+# dbt >= 1.5 chỉ nhận --project-dir/--profiles-dir sau subcommand → truyền bằng env
+DBT = f"DBT_PROJECT_DIR={DBT_DIR} DBT_PROFILES_DIR={DBT_DIR} /opt/airflow/dbt_venv/bin/dbt"
 DBT_PROFILE = f"cp -n {DBT_DIR}/profiles.example.yml {DBT_DIR}/profiles.yml"
 
 
@@ -72,7 +73,7 @@ def task(task_id: str, command: str) -> BashOperator:
 
 with DAG(
     dag_id="olist_pipeline",
-    description="Kaggle/IBGE/holidays → MinIO → raw → dbt (stg, dw, bi) → ML → meta",
+    description="Kaggle/holidays → Azure Blob → raw → dbt (stg, dw, bi) → ML → meta",
     start_date=datetime(2026, 10, 1),
     schedule="@daily",
     catchup=False,
@@ -83,7 +84,6 @@ with DAG(
     extract = [
         task("download_kaggle", "python -m ingestion.download_kaggle"),
         task("copy_manual", "python -m ingestion.copy_manual"),
-        task("fetch_ibge", "python -m ingestion.fetch_ibge"),
         task("gen_holidays", "python -m ingestion.gen_holidays"),
     ]
     upload_to_lake = task("upload_to_lake", "python -m ingestion.upload_to_lake")

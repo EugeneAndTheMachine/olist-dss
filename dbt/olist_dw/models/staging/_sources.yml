@@ -27,10 +27,6 @@ sources:
         description: "olist_marketing_qualified_leads_dataset.csv"
       - name: closed_deals
         description: "olist_closed_deals_dataset.csv"
-      - name: ibge_states
-        description: "IBGE /localidades/estados (JSON đã làm phẳng)"
-      - name: ibge_municipalities
-        description: "IBGE /localidades/municipios (JSON đã làm phẳng)"
       - name: br_holidays
         description: "Ngày lễ quốc gia Brazil 2016–2019 sinh từ package holidays"
       - name: br_states

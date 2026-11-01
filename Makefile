@@ -8,7 +8,10 @@ export
 UV ?= uv
 PYTHON ?= $(UV) run python
 DBT_DIR := dbt/olist_dw
-DBT := $(UV) run dbt --project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
+# dbt >= 1.5 chỉ nhận --project-dir/--profiles-dir SAU subcommand → truyền bằng env (được export ở trên)
+DBT_PROJECT_DIR := $(DBT_DIR)
+DBT_PROFILES_DIR := $(DBT_DIR)
+DBT := $(UV) run dbt
 COMPOSE := docker compose
 
 .PHONY: help venv lock up up-airflow down ingest load-raw dbt-profile dbt-deps seed build ml meta docs docs-serve all replay reset-db
@@ -30,7 +33,7 @@ lock:
 	$(UV) export --format requirements-txt --no-hashes --all-groups --no-header -o requirements.txt
 
 up:
-	$(COMPOSE) up -d postgres minio minio-init
+	$(COMPOSE) up -d postgres azurite
 
 up-airflow:
 	$(COMPOSE) --profile airflow up -d --build
@@ -41,7 +44,6 @@ down:
 ingest:
 	$(PYTHON) -m ingestion.download_kaggle
 	$(PYTHON) -m ingestion.copy_manual
-	$(PYTHON) -m ingestion.fetch_ibge
 	$(PYTHON) -m ingestion.gen_holidays
 	$(PYTHON) -m ingestion.upload_to_lake
 

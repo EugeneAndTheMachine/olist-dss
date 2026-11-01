@@ -15,7 +15,7 @@
 | Thời hạn | 2 tuần: bắt đầu 31/10/2026, nộp 13/11/2026 (giả định, chỉnh nếu khác) |
 | Bài toán | Sàn TMĐT đa người bán (mô phỏng Olist, Brazil) cần tăng doanh số mà không giảm chất lượng giao hàng / mất khách. Dữ liệu đơn, thanh toán, giao hàng, đánh giá, người bán chưa có định nghĩa chung → xây DW Kimball + BI + ML hỗ trợ 4 người ra quyết định theo 3 pha Simon |
 | Kiến trúc | Medallion (Landing → Bronze → Silver → Gold → Serving) trên Kimball bus architecture |
-| Stack | Docker Compose · MinIO (data lake) · PostgreSQL 16 (warehouse) · dbt-core + dbt-postgres (ELT) · Airflow (điều phối) · Python 3.11 (ingestion, ML) · Power BI Desktop (serving) |
+| Stack | Docker Compose · Azure Blob Storage: Azurite local / ADLS Gen2 trên cloud (data lake) · PostgreSQL 16 (warehouse) · dbt-core + dbt-postgres (ELT) · Airflow (điều phối) · Python 3.11 (ingestion, ML) · Power BI Desktop (serving) |
 | Không dùng | Spark, BigQuery (lý do ở mục 3.2) |
 | Lệnh chính | `make all` dựng lại toàn bộ từ file raw |
 
@@ -79,14 +79,13 @@ Nối: `closed_deals.mql_id → mql.mql_id`; `closed_deals.seller_id → sellers
 
 | Nguồn | Cách lấy | Bảng raw | Dùng cho |
 | --- | --- | --- | --- |
-| IBGE Localidades API (bang, vùng, municipality) | `GET https://servicodados.ibge.gov.br/api/v1/localidades/estados` và `/municipios` (kiểm tra lại endpoint khi code) | raw.ibge_states, raw.ibge_municipalities | dim_geography: state_name, region_name, ibge_state_id |
-| Dân số theo bang (IBGE) | CSV tự tạo (seed) từ số liệu ước tính IBGE ~2018 | seed `br_state_population` | dim_geography.state_population, KPI per capita |
+| Mã IBGE & dân số theo bang | CSV tự tạo (seed) từ số liệu IBGE: mã bang 2 chữ số + dân số ước tính ~2018 | seed `br_state_population` (state_code, ibge_state_id, population_2018) | dim_geography.ibge_state_id, state_population, KPI per capita |
 | Ngày lễ Brazil | Python package `holidays` (`holidays.Brazil(years=2016..2019)`) → CSV | raw.br_holidays | dim_date.is_br_holiday, holiday_name |
 | Black Friday | Tính trong dbt: thứ Sáu thứ 4 của tháng 11 (2016-11-25, 2017-11-24, 2018-11-23) | — | dim_date.is_black_friday_week (tuần ISO chứa Black Friday) |
-| Bang & vùng (nhóm tự chuẩn bị) | `data/raw/events_brazilstates/br_states.csv` (state_code, state_name, region_name) | raw.br_states | Dự phòng / đối chiếu IBGE cấp bang cho dim_geography |
+| Bang & vùng (nhóm tự chuẩn bị) | `data/raw/events_brazilstates/br_states.csv` (state_code, state_name, region_name) | raw.br_states | dim_geography: state_name, region_name |
 | Lịch sự kiện (nhóm tự chuẩn bị) | `data/raw/events_brazilstates/calendar_events.csv` (event_date, event_name, event_type ∈ national_holiday, retail_event) | raw.calendar_events | Đối chiếu holidays; sự kiện bán lẻ (Mother's Day, Dia dos Namorados, Black Friday…) cho dim_date (COULD) |
 
-Fallback nếu API lỗi: lưu sẵn JSON trả về vào `data/fallback/` và commit (file nhỏ).
+**Không dùng IBGE Localidades API** (2026-11-01): API chặn IP ngoài Brazil (timeout / 403 từ Việt Nam). Thông tin cấp bang đã đủ trong `br_states.csv` + seed; danh mục municipality (chỉ cho city-level enrichment, COULD) bị bỏ.
 
 **File tải tay**: `data/raw/` (gitignored) là nơi đặt CSV tải thủ công — `ecom_dataset/` (9 file), `marketing_funnel/` (2 file), `events_brazilstates/` (2 file). `download_kaggle.py` ưu tiên copy từ đây, chỉ gọi Kaggle API khi thiếu file; `copy_manual.py` đưa `events_brazilstates/` vào landing (`landing/manual/events_brazilstates/`).
 
@@ -98,7 +97,7 @@ Fallback nếu API lỗi: lưu sẵn JSON trả về vào `data/fallback/` và c
 
 ```
  Kaggle (2 datasets) ──┐
- IBGE API (JSON) ──────┼──▶ LANDING / BRONZE FILES ── MinIO bucket `olist-lake`
+ CSV nhóm chuẩn bị ────┼──▶ LANDING / BRONZE FILES ── Azure Blob container `olist-lake`
  holidays (Python) ────┘      landing/<source>/<dataset>/extract_date=YYYY-MM-DD/<file>
                                      │  (file gốc, bất biến, không bao giờ sửa)
                                      ▼  Python load_raw.py (COPY, append-only)
@@ -114,17 +113,17 @@ Fallback nếu API lỗi: lưu sẵn JSON trả về vào `data/fallback/` và c
  Airflow (DAG `olist_pipeline`) điều phối toàn bộ chuỗi. Docker Compose đóng gói mọi service.
 ```
 
-Ánh xạ Medallion ↔ schema: Landing/Bronze = MinIO + `raw`; Silver = `stg`; Gold = `dw` (+ `bi` là logical data marts); ML ghi vào `ml`, **không ghi vào `dw`**.
+Ánh xạ Medallion ↔ schema: Landing/Bronze = Azure Blob container `olist-lake` + `raw`; Silver = `stg`; Gold = `dw` (+ `bi` là logical data marts); ML ghi vào `ml`, **không ghi vào `dw`**.
 
 ### 3.2 Quyết định tech stack (đã chốt)
 
 | Thành phần | Chọn | Thay vì | Lý do |
 | --- | --- | --- | --- |
-| Data lake (Landing/Bronze files) | **MinIO** (S3-compatible, chạy trong Docker) | Local folder, S3, ADLS | Miễn phí, chạy offline, API S3 giống thật → chứng minh được khái niệm data lake; dễ thay bằng S3 thật. Fallback: thư mục `data/landing/` |
+| Data lake (Landing/Bronze files) | **Azure Blob Storage** qua SDK `azure-storage-blob`: **Azurite** (emulator của Microsoft, Docker) khi dev; **ADLS Gen2** (Azure for Students) khi demo | MinIO, local folder, S3 | MinIO ngừng phát hành image community (10/2025) nên bỏ. Azurite miễn phí, offline, cùng API với Azure thật → đổi backend chỉ bằng `AZURE_STORAGE_CONNECTION_STRING`. Fallback: thư mục `data/landing/` |
 | Warehouse (Silver/Gold) | **PostgreSQL 16** | BigQuery | Dữ liệu nhỏ (<200 MB); chạy local cho cả 4 người, không cần billing/IAM GCP; Power BI có connector sẵn; dbt-postgres ổn định; môn học tập trung vào khái niệm DW, không cần MPP |
-| Transform | **dbt-core + dbt-postgres** (ELT trong DB) | Spark | Spark là overkill cho ~100k đơn, thêm JVM/cluster; phần thiết kế ETL đã viết theo dbt (test, docs, lineage, snapshot, incremental có sẵn). Nếu giảng viên **bắt buộc** Spark: dùng PySpark local chỉ ở bước CSV → Parquet trong MinIO, không đụng dbt |
+| Transform | **dbt-core + dbt-postgres** (ELT trong DB) | Spark | Spark là overkill cho ~100k đơn, thêm JVM/cluster; phần thiết kế ETL đã viết theo dbt (test, docs, lineage, snapshot, incremental có sẵn). Nếu giảng viên **bắt buộc** Spark: dùng PySpark local chỉ ở bước CSV → Parquet trên data lake (Azure Blob), không đụng dbt |
 | Orchestration | **Airflow** (đề xuất của Trường An) | cron, Prefect | Phổ biến, có UI để demo DAG, retry, lịch batch. Dữ liệu không cần realtime → batch là đúng. Airflow chỉ điều phối, **không** phải nơi lưu dữ liệu |
-| Ingestion / ML | **Python 3.11** | — | pandas, psycopg, boto3, scikit-learn, LightGBM, statsmodels, PuLP |
+| Ingestion / ML | **Python 3.11** | — | pandas, psycopg, azure-storage-blob, scikit-learn, LightGBM, statsmodels, PuLP |
 | Serving | **Power BI Desktop** (Import mode) | Superset, Metabase | Phù hợp người dùng nghiệp vụ, có What-if parameters |
 | Đóng gói | **Docker Compose**, **Makefile** | — | Một lệnh dựng lại môi trường |
 
@@ -155,16 +154,15 @@ olist-dss/
 ├── requirements-airflow.txt
 ├── data/
 │   ├── raw/                      # CSV nguồn, COMMIT (ecom_dataset/, marketing_funnel/, events_brazilstates/)
-│   ├── landing/                  # cache local trước khi upload MinIO (gitignored)
-│   └── fallback/                 # JSON IBGE đã lưu sẵn
+│   ├── landing/                  # cache local trước khi upload lên Azure Blob (gitignored)
 ├── ingestion/
 │   ├── config.py                 # đọc .env, tên bucket, kết nối
 │   ├── download_kaggle.py        # P3 (ưu tiên data/raw/, thiếu mới gọi Kaggle API)
 │   ├── copy_manual.py            # P3: data/raw/events_brazilstates → landing/manual
-│   ├── fetch_ibge.py             # P4
 │   ├── gen_holidays.py           # P4
+│   ├── lake.py                   # client Azure Blob (Azurite / Azure thật)
 │   ├── upload_to_lake.py         # P5
-│   ├── load_raw.py               # P5: MinIO → raw.*, ghi meta.etl_run_log
+│   ├── load_raw.py               # P5: Azure Blob → raw.*, ghi meta.etl_run_log
 │   └── meta_publish.py           # P8: run_results → meta.dq_results, manifest → source_to_target
 ├── dbt/olist_dw/
 │   ├── dbt_project.yml
@@ -213,7 +211,7 @@ olist-dss/
 
 ```
 pandas, pyarrow, psycopg[binary]>=3.1, sqlalchemy>=2, python-dotenv,
-boto3 (hoặc minio), kaggle, requests, holidays, unidecode,
+azure-storage-blob, kaggle, requests, holidays, unidecode,
 dbt-core, dbt-postgres,            # pin cùng một minor version cho cả nhóm (>=1.8)
 scikit-learn, lightgbm, statsmodels, pulp, shap (tuỳ chọn),
 jupyter, matplotlib, seaborn
@@ -230,10 +228,8 @@ POSTGRES_USER=olist
 POSTGRES_PASSWORD=olist
 POSTGRES_DB=olist_dw
 AIRFLOW_DB=airflow
-MINIO_ENDPOINT=http://localhost:9000   # trong container: http://minio:9000
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin
-LAKE_BUCKET=olist-lake
+AZURE_STORAGE_CONNECTION_STRING=<Azurite mặc định | Azure thật>   # trong container: 127.0.0.1 → azurite (tự đổi)
+LAKE_CONTAINER=olist-lake
 KAGGLE_USERNAME=
 KAGGLE_KEY=
 AIRFLOW_UID=50000
@@ -246,8 +242,7 @@ ANALYSIS_END=2018-08-31
 | Service | Image | Port | Ghi chú |
 | --- | --- | --- | --- |
 | postgres | postgres:16 | 5432 | Mount `docker/postgres/init/` vào `/docker-entrypoint-initdb.d/`; tạo DB `olist_dw` và `airflow`; tạo schema raw, stg, dw, bi, ml, meta; volume `pgdata` |
-| minio | minio/minio | 9000 (API), 9001 (console) | `server /data --console-address ":9001"`, volume `miniodata` |
-| minio-init | minio/mc | — | Chạy một lần: `mc alias set` rồi `mc mb -p local/olist-lake` |
+| azurite | mcr.microsoft.com/azure-storage/azurite (pin) | 10000 (Blob) | `azurite-blob --loose --skipApiVersionCheck`, volume `azuritedata`; container `olist-lake` do `upload_to_lake` tự tạo |
 | airflow | build từ `docker/airflow/Dockerfile` | 8080 | Dev mode: `airflow standalone` với `AIRFLOW__CORE__EXECUTOR=LocalExecutor`, metadata DB = postgres/airflow. Mount `airflow/dags`, `ingestion`, `dbt`, `ml`, `data` |
 
 `docker/airflow/Dockerfile`: FROM `apache/airflow:<2.10.x>-python3.11` (pin), cài `requirements-airflow.txt`, tạo **venv riêng cho dbt** (`/opt/airflow/dbt_venv`) để tránh xung đột dependency giữa Airflow và dbt. Task dbt gọi `/opt/airflow/dbt_venv/bin/dbt`.
@@ -258,9 +253,9 @@ Fallback nếu máy yếu không chạy nổi Airflow: chạy `make all` (cùng 
 
 | Target | Việc làm |
 | --- | --- |
-| `make up` / `make down` | docker compose up -d (postgres, minio, minio-init) / down |
+| `make up` / `make down` | docker compose up -d (postgres, azurite) / down |
 | `make up-airflow` | Bật thêm service Airflow (compose profile `airflow`) |
-| `make ingest` | download_kaggle + copy_manual + fetch_ibge + gen_holidays + upload_to_lake |
+| `make ingest` | download_kaggle + copy_manual + gen_holidays + upload_to_lake |
 | `make load-raw` | load_raw.py (batch mới, append) |
 | `make dbt-deps` / `make seed` | dbt deps / dbt seed |
 | `make build` | dbt build (run + test) toàn bộ stg → dw → bi |
@@ -279,7 +274,7 @@ dbt profile: `profiles.example.yml` đọc host/port/user từ env (`{{ env_var(
 
 | Layer | Nơi lưu | Chứa | Build bởi | Quy tắc |
 | --- | --- | --- | --- | --- |
-| Landing / Bronze files | MinIO `olist-lake/landing/<source>/<dataset>/extract_date=YYYY-MM-DD/` | CSV Kaggle, JSON API, CSV holidays nguyên bản | Python ingestion | Không bao giờ sửa; mỗi lần trích xuất 1 thư mục ngày |
+| Landing / Bronze files | Azure Blob container `olist-lake/landing/<source>/<dataset>/extract_date=YYYY-MM-DD/` | CSV Kaggle, JSON API, CSV holidays nguyên bản | Python ingestion | Không bao giờ sửa; mỗi lần trích xuất 1 thư mục ngày |
 | Raw (Bronze, queryable) | schema `raw` | 1 bảng / file nguồn, **mọi cột kiểu text** + `_batch_id`, `_loaded_at`, `_source_file` | Python COPY | Append-only, không làm sạch |
 | Staging (Silver) | schema `stg` | Bảng đã ép kiểu, dedup, đổi tên, chuẩn hoá, cờ dẫn xuất; `int_*` models; seeds | dbt | Mọi rule làm sạch nằm trong SQL model + mô tả YAML |
 | Warehouse (Gold) | schema `dw` | Dims + facts mục 7 | dbt | Surrogate key, unknown member -1, FK tests |
@@ -412,7 +407,7 @@ Lags (ngày, dạng numeric có phần lẻ): approval_lag = approved − purcha
 - **Customers**: map customer_id → customer_unique_id (`int_customer_map`).
 - **Geolocation**: gộp về 1 dòng / zip prefix (mean lat/lng, city & state xuất hiện nhiều nhất), bỏ dấu (unidecode/`unaccent` extension) + lower case, loại điểm ngoài bounding box Brazil (lat −34 → 5.5; lng −74 → −34).
 - **Products**: category null → `unknown`; join translation (category thiếu bản dịch → giữ tên PT); sửa cột `lenght` → `length`; volume_cm3 = L×H×W; weight_band, size_band theo seed hoặc CASE.
-- **States/cities**: khớp mã bang 2 ký tự Olist với `sigla` IBGE; bỏ dấu tên city trước khi so; enrich cấp bang trước (tin cậy), cấp city là COULD.
+- **States/cities**: khớp mã bang 2 ký tự Olist với `state_code` của `br_states` và seed `br_state_population`; bỏ dấu tên city (city lấy từ geolocation/customers/sellers, không có danh mục municipality).
 - **Funnel**: parse dates, dedup theo mql_id, test tỷ lệ khớp seller_id với sellers; average_stock → stock_band.
 - **Holidays**: `stg_br_holidays(date, holiday_name)`.
 
@@ -520,7 +515,7 @@ Semantic model dạng galaxy: conformed dims dùng chung; role-playing date/geog
 ## 15. Orchestration — DAG `olist_pipeline` (P6)
 
 ```
-[download_kaggle, copy_manual, fetch_ibge, gen_holidays] → upload_to_lake → load_raw
+[download_kaggle, copy_manual, gen_holidays] → upload_to_lake → load_raw
   → dbt_deps → dbt_seed → dbt_build (stg, dw, bi)
   → [ml_late_risk, ml_crm, ml_forecast, ml_seller_risk] → ml_recommendations
   → meta_publish → dbt_docs_generate
@@ -535,7 +530,7 @@ Semantic model dạng galaxy: conformed dims dùng chung; role-playing date/geog
 
 ## 16. Quy ước code & guardrails cho Claude
 
-- **Không bao giờ** sửa file trong landing/MinIO hay bảng `raw` ngoài append bởi load_raw.
+- **Không bao giờ** sửa file trong landing/data lake hay bảng `raw` ngoài append bởi load_raw.
 - Mọi làm sạch nằm trong dbt model, có mô tả trong YAML. Không sửa dữ liệu bằng tay.
 - Mọi model mới phải có YAML: description cho model và từng cột, test key (unique/not_null), relationships cho FK.
 - Không lưu tỷ lệ % trong fact; lưu tử số + mẫu số.
@@ -558,9 +553,9 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 
 ### P — Data Platform, Ingestion, Orchestration (TV1 — Ngọc Cẩn)
 - [x] P1 MUST Repo skeleton, .gitignore, .env.example, Makefile, README quickstart
-- [~] P2 MUST docker-compose (postgres + init SQL schemas/meta/ml, minio + minio-init); Airflow service (SHOULD)
+- [~] P2 MUST docker-compose (postgres + init SQL schemas/meta/ml, azurite); Airflow service (SHOULD)
 - [~] P3 MUST download_kaggle.py (2 dataset → landing local, extract_date)
-- [~] P4 MUST fetch_ibge.py (+ fallback JSON), gen_holidays.py
+- [~] P4 MUST gen_holidays.py (IBGE API đã bỏ, bang/vùng từ br_states.csv)
 - [~] P5 MUST upload_to_lake.py, load_raw.py (COPY text + metadata cols + etl_run_log)
 - [~] P6 SHOULD Airflow DAG olist_pipeline + Dockerfile (dbt venv)
 - [ ] P7 SHOULD replay_month.py (+ cùng F8)
@@ -570,7 +565,7 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 ### S — Staging, Dimensions, Data Quality (TV2 — Minh Hiếu)
 - [ ] S1 MUST Profiling → docs/profiling.md (xác nhận mục 1.3, 7.4 seed, 9, tolerance item vs payment)
 - [~] S2 MUST dbt project init, sources.yml, macros (generate_schema_name, int_sk), seeds
-- [ ] S3 MUST stg_* cho 11 file + ibge + holidays; int_customer_map
+- [ ] S3 MUST stg_* cho 11 file + br_states + calendar_events + holidays; int_customer_map
 - [ ] S4 MUST dim_date, dim_geography, dim_product, dim_customer, dim_order_status, dim_payment_type
 - [ ] S5 SHOULD dim_lead_origin, dim_lead_profile, dim_sales_rep, fact_lead_funnel
 - [ ] S6 SHOULD int_seller_month_metrics, int_seller_tier_monthly, int_seller_tier_versions, dim_seller SCD2 (MUST: bản Type 1 tạm trước để F không bị chặn)
@@ -622,6 +617,8 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 
 - 2026-10-30: Nén timeline từ "Week 1/2/3 + Stretch" thành 14 ngày, phân MUST/SHOULD/COULD.
 - 2026-10-30: Chốt PostgreSQL thay BigQuery; dbt thay Spark; thêm MinIO làm data lake; Airflow chỉ điều phối.
+- 2026-11-01: Thay MinIO (ngừng phát hành image community) bằng Azure Blob Storage: Azurite khi dev, ADLS Gen2 (Azure for Students) khi demo. boto3 → azure-storage-blob; env `MINIO_*`/`LAKE_BUCKET` → `AZURE_STORAGE_CONNECTION_STRING`/`LAKE_CONTAINER`.
+- 2026-11-01: Bỏ IBGE Localidades API (chặn IP ngoài Brazil). Bang & vùng từ `data/raw/events_brazilstates/br_states.csv`; `ibge_state_id` thêm vào seed `br_state_population`; bỏ `raw.ibge_states`, `raw.ibge_municipalities`, `fetch_ibge.py`, `data/fallback/`. raw còn 14 bảng.
 - 2026-10-30: Segment khách chuyển từ dw.dim_customer sang bi.v_dim_customer (tránh vòng dw ↔ ml).
 - 2026-10-30: Surrogate key băm từ natural key (ổn định cho incremental).
 - 2026-10-30: dim_seller gồm cả seller từ closed_deals chưa có doanh số (has_sales, is_from_funnel); thêm tier Unscored.

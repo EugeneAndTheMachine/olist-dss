@@ -35,12 +35,15 @@ seeds:
         description: "Thứ tự hiển thị"
 
   - name: br_state_population
-    description: "Dân số ước tính theo bang ~2018 (IBGE). TV2 kiểm tra lại số liệu nguồn ở S2."
+    description: "Mã IBGE và dân số ước tính theo bang ~2018 (IBGE). TV2 kiểm tra lại số liệu nguồn ở S2."
     config:
-      column_types: {state_code: text, population_2018: bigint}
+      column_types: {state_code: text, ibge_state_id: integer, population_2018: bigint}
     columns:
       - name: state_code
         description: "Mã bang 2 ký tự (sigla)"
+        data_tests: [unique, not_null]
+      - name: ibge_state_id
+        description: "Mã bang 2 chữ số của IBGE (chữ số đầu = vùng: 1 Norte, 2 Nordeste, 3 Sudeste, 4 Sul, 5 Centro-Oeste)"
         data_tests: [unique, not_null]
       - name: population_2018
         description: "Dân số ước tính 2018"

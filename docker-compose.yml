@@ -20,40 +20,23 @@ services:
       timeout: 5s
       retries: 20
 
-  minio:
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+  # Data lake: Azurite = giả lập Azure Blob Storage của Microsoft (thay MinIO, đã ngừng phát hành image).
+  # Dùng Azure thật: đổi AZURE_STORAGE_CONNECTION_STRING trong .env, không cần service này.
+  azurite:
+    image: ${AZURITE_IMAGE:-mcr.microsoft.com/azure-storage/azurite:3.37.0}
     restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: >
+      azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data
+      --loose --skipApiVersionCheck
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "10000:10000"
     volumes:
-      - miniodata:/data
+      - azuritedata:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 10000"]
       interval: 5s
       timeout: 5s
       retries: 20
-
-  minio-init:
-    image: ${MC_IMAGE:-minio/mc:RELEASE.2025-04-16T18-13-26Z}
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
-      mc mb -p local/$${LAKE_BUCKET} &&
-      echo 'bucket ready'
-      "
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      LAKE_BUCKET: ${LAKE_BUCKET:-olist-lake}
-    restart: "no"
 
   # Chỉ bật khi cần: make up-airflow (docker compose --profile airflow up -d)
   airflow:
@@ -66,7 +49,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
+      azurite:
         condition: service_healthy
     env_file:
       - path: .env
@@ -75,7 +58,8 @@ services:
       # Ghi đè giá trị localhost trong .env bằng tên service trong mạng docker
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      MINIO_ENDPOINT: http://minio:9000
+      # Connection string Azurite trỏ 127.0.0.1:10000 → trong container đổi thành host "azurite" (ingestion/lake.py)
+      AZURITE_HOST: azurite
       OLIST_HOME: /opt/olist
       PYTHONPATH: /opt/olist
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -97,4 +81,4 @@ services:
 
 volumes:
   pgdata:
-  miniodata:
+  azuritedata:

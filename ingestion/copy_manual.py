@@ -1,6 +1,6 @@
 """Đưa các file nhóm tự chuẩn bị (data/raw/events_brazilstates/) vào landing.
 
-- br_states.csv: state_code, state_name, region_name (dự phòng cho IBGE cấp bang)
+- br_states.csv: state_code, state_name, region_name (nguồn bang & vùng cho dim_geography)
 - calendar_events.csv: event_date, event_name, event_type (lễ quốc gia + sự kiện bán lẻ)
 
 Kết quả: data/landing/manual/events_brazilstates/extract_date=YYYY-MM-DD/<file>.csv

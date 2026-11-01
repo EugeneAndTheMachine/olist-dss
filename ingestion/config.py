@@ -17,11 +17,17 @@ load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 DATA_DIR = PROJECT_ROOT / "data"
 LANDING_DIR = DATA_DIR / "landing"
-FALLBACK_DIR = DATA_DIR / "fallback"
 MANUAL_RAW_DIR = PROJECT_ROOT / os.getenv("LOCAL_RAW_DIR", "data/raw")
 DBT_PROJECT_DIR = PROJECT_ROOT / "dbt" / "olist_dw"
 
 LAKE_PREFIX = "landing"
+
+# Connection string mặc định của Azurite (tài khoản dev công khai, ghi trong tài liệu Microsoft — không phải bí mật)
+AZURITE_CONNECTION_STRING = (
+    "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;"
+    "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;"
+    "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
+)
 
 
 def setup_logging(level: int = logging.INFO) -> None:
@@ -42,10 +48,8 @@ class Settings:
     postgres_user: str
     postgres_password: str
     postgres_db: str
-    minio_endpoint: str
-    minio_user: str
-    minio_password: str
-    lake_bucket: str
+    lake_connection_string: str
+    lake_container: str
     analysis_start: str
     analysis_end: str
 
@@ -75,10 +79,8 @@ def get_settings() -> Settings:
         postgres_user=env("POSTGRES_USER", "olist"),
         postgres_password=env("POSTGRES_PASSWORD", "olist"),
         postgres_db=env("POSTGRES_DB", "olist_dw"),
-        minio_endpoint=env("MINIO_ENDPOINT", "http://localhost:9000"),
-        minio_user=env("MINIO_ROOT_USER", "minioadmin"),
-        minio_password=env("MINIO_ROOT_PASSWORD", "minioadmin"),
-        lake_bucket=env("LAKE_BUCKET", "olist-lake"),
+        lake_connection_string=env("AZURE_STORAGE_CONNECTION_STRING", AZURITE_CONNECTION_STRING),
+        lake_container=env("LAKE_CONTAINER", "olist-lake"),
         analysis_start=env("ANALYSIS_START", "2017-01-01"),
         analysis_end=env("ANALYSIS_END", "2018-08-31"),
     )
@@ -122,9 +124,6 @@ RAW_SOURCES: list[RawSource] = [
     # Kaggle olistbr/marketing-funnel-olist
     RawSource("kaggle", FUNNEL, "olist_marketing_qualified_leads_dataset.csv", "mql"),
     RawSource("kaggle", FUNNEL, "olist_closed_deals_dataset.csv", "closed_deals"),
-    # IBGE API
-    RawSource("ibge", "states", "states.json", "ibge_states"),
-    RawSource("ibge", "municipalities", "municipalities.json", "ibge_municipalities"),
     # Python holidays
     RawSource("holidays", "br_holidays", "br_holidays.csv", "br_holidays"),
     # File nhóm tự chuẩn bị (data/raw/events_brazilstates)

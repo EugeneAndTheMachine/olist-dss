@@ -12,7 +12,7 @@ Cần viết (CLAUDE.md mục 7, 9, 10, 14):
 
 | Thư mục | Model | Task | Người |
 | --- | --- | --- | --- |
-| staging | `stg_order_items`, `stg_order_payments`, `stg_order_reviews`, `stg_customers`, `stg_sellers`, `stg_products`, `stg_geolocation`, `stg_product_category_name_translation`, `stg_mql`, `stg_closed_deals`, `stg_ibge_states`, `stg_ibge_municipalities`, `stg_br_states`, `stg_calendar_events` | S3 | Minh Hiếu (TV2) |
+| staging | `stg_order_items`, `stg_order_payments`, `stg_order_reviews`, `stg_customers`, `stg_sellers`, `stg_products`, `stg_geolocation`, `stg_product_category_name_translation`, `stg_mql`, `stg_closed_deals`, `stg_br_states`, `stg_calendar_events` | S3 | Minh Hiếu (TV2) |
 | intermediate | `int_customer_map` | S3 | Minh Hiếu (TV2) |
 | intermediate | `int_seller_month_metrics`, `int_seller_tier_monthly`, `int_seller_tier_versions` | S6 | Minh Hiếu (TV2) |
 | intermediate | `int_order_primary_seller`, `int_order_agg` | F1 | Xuân Vinh (TV3) |

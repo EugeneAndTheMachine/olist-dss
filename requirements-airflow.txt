@@ -1,6 +1,6 @@
 # Cài vào image Airflow (cùng constraint của Airflow). dbt KHÔNG nằm ở đây — dbt có venv riêng /opt/airflow/dbt_venv.
 python-dotenv>=1.0
-boto3>=1.34
+azure-storage-blob>=12.20
 kaggle>=1.6
 holidays>=0.50
 unidecode>=1.3

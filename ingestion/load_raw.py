@@ -1,4 +1,4 @@
-"""P5 — Nạp file từ MinIO vào schema raw (Bronze, queryable).
+"""P5 — Nạp file từ data lake (Azure Blob / Azurite) vào schema raw (Bronze, queryable).
 
 - Mỗi file nguồn ↔ 1 bảng raw.<table> (danh mục ở config.RAW_SOURCES).
 - Mọi cột kiểu text + _batch_id, _loaded_at, _source_file. Không làm sạch.
@@ -18,11 +18,11 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import psycopg
-from botocore.client import BaseClient
+from azure.storage.blob import ContainerClient
 from psycopg import sql
 
 from ingestion.config import RAW_SOURCES, RawSource, get_settings, setup_logging
-from ingestion.upload_to_lake import s3_client
+from ingestion import lake
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +35,12 @@ def clean_column(name: str) -> str:
     return col[:63] or "col"
 
 
-def list_keys(s3: BaseClient, bucket: str, src: RawSource) -> list[str]:
-    keys: list[str] = []
-    paginator = s3.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix=src.lake_prefix):
-        keys += [o["Key"] for o in page.get("Contents", []) if o["Key"].endswith("/" + src.file_name)]
-    return sorted(keys)
+def list_keys(container: ContainerClient, src: RawSource) -> list[str]:
+    return [k for k in lake.list_keys(container, src.lake_prefix) if k.endswith("/" + src.file_name)]
 
 
-def read_object(s3: BaseClient, bucket: str, key: str) -> pd.DataFrame:
-    body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+def read_object(container: ContainerClient, key: str) -> pd.DataFrame:
+    body = lake.read_bytes(container, key)
     if key.endswith(".json"):
         df = pd.json_normalize(json.loads(body.decode("utf-8")), sep="_")
         df = df.astype("string")
@@ -94,12 +90,12 @@ def log_run(conn: psycopg.Connection, **fields: object) -> None:
     )
 
 
-def load_file(conn: psycopg.Connection, s3: BaseClient, bucket: str, src: RawSource, key: str,
+def load_file(conn: psycopg.Connection, container: ContainerClient, src: RawSource, key: str,
               run_id: str, batch_id: str) -> None:
     started = datetime.now(timezone.utc)
     rows_in = 0
     try:
-        df = read_object(s3, bucket, key)
+        df = read_object(container, key)
         rows_in = len(df)
         df["_batch_id"] = batch_id
         df["_loaded_at"] = started.isoformat()
@@ -120,14 +116,14 @@ def load_file(conn: psycopg.Connection, s3: BaseClient, bucket: str, src: RawSou
 
 def run(tables: list[str] | None = None) -> None:
     settings = get_settings()
-    s3 = s3_client(settings)
+    container = lake.container_client(settings)
     run_id = str(uuid.uuid4())
     batch_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}_{run_id[:8]}"
     selected = [s for s in RAW_SOURCES if not tables or s.raw_table in tables]
     loaded = 0
     with psycopg.connect(settings.pg_conninfo, autocommit=True) as conn:
         for src in selected:
-            keys = list_keys(s3, settings.lake_bucket, src)
+            keys = list_keys(container, src)
             if not keys:
                 logger.warning("Không có file nào cho raw.%s trên lake (%s)", src.raw_table, src.lake_prefix)
                 continue
@@ -135,7 +131,7 @@ def run(tables: list[str] | None = None) -> None:
                 if already_loaded(conn, src.raw_table, key):
                     logger.info("raw.%s: %s đã nạp, bỏ qua", src.raw_table, key)
                     continue
-                load_file(conn, s3, settings.lake_bucket, src, key, run_id, batch_id)
+                load_file(conn, container, src, key, run_id, batch_id)
                 loaded += 1
     logger.info("Batch %s: nạp %d file", batch_id, loaded)
 

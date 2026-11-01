@@ -18,7 +18,7 @@
 **Dữ liệu.**
 - Brazilian E-Commerce (Olist, Kaggle): ~100k đơn 2016–2018, 9 bảng.
 - Marketing Funnel (Olist, Kaggle): ~8k lead, 842 deal chốt, 2 bảng.
-- Bổ sung: IBGE API (bang, vùng, dân số), ngày lễ Brazil (package `holidays`).
+- Bổ sung: bang & vùng Brazil (`br_states.csv` nhóm chuẩn bị), mã IBGE + dân số theo bang (seed), ngày lễ Brazil (package `holidays`).
 
 **Sản phẩm nộp.** Repo code chạy được bằng một lệnh (`make all`), Power BI dashboard 8 trang, báo cáo, buổi demo.
 
@@ -45,10 +45,10 @@
 ## 3. Kiến trúc & công nghệ
 
 ```
- Kaggle, IBGE API, holidays
+ Kaggle, CSV nhóm chuẩn bị, holidays
           │  Python
           ▼
- LANDING / BRONZE  ── MinIO (data lake, file gốc bất biến)
+ LANDING / BRONZE  ── Azure Blob Storage (data lake, file gốc bất biến; Azurite local / ADLS Gen2 cloud)
           │  Python COPY
           ▼
  PostgreSQL 16:  raw (Bronze) → stg (Silver) → dw (Gold) → bi (data marts)
@@ -62,9 +62,9 @@
 
 | Thành phần | Chọn | Vì sao (so với phương án còn lại) |
 | --- | --- | --- |
-| Data lake | **MinIO** (đề xuất mới) | Giống S3 thật nhưng chạy local miễn phí; thể hiện được tầng data lake. Dự phòng: thư mục local |
+| Data lake | **Azure Blob Storage** (thay MinIO, 01/11) | MinIO ngừng phát hành image miễn phí. Dev bằng Azurite (giả lập Azure chạy local, miễn phí); demo trên ADLS Gen2 thật bằng Azure for Students. Dự phòng: thư mục local |
 | Warehouse | **PostgreSQL** (thay vì BigQuery) | Dữ liệu nhỏ; cả 4 người chạy local, không cần tài khoản/billing GCP; Power BI kết nối sẵn |
-| Biến đổi | **dbt** (thay vì Spark) | ~100k đơn không cần Spark; dbt cho sẵn test, tài liệu, lineage, snapshot, incremental — đúng những thứ môn DW chấm. Nếu giảng viên bắt buộc Spark: thêm 1 bước PySpark chuyển CSV → Parquet trong MinIO |
+| Biến đổi | **dbt** (thay vì Spark) | ~100k đơn không cần Spark; dbt cho sẵn test, tài liệu, lineage, snapshot, incremental — đúng những thứ môn DW chấm. Nếu giảng viên bắt buộc Spark: thêm 1 bước PySpark chuyển CSV → Parquet trên data lake (Azure Blob) |
 | Điều phối | **Airflow** (đề xuất của Trường An) | Lịch batch, retry, UI để demo. Dữ liệu không cần realtime nên batch là đúng. Airflow chỉ điều phối, không lưu dữ liệu |
 | ML | Python: scikit-learn, LightGBM, statsmodels, PuLP | |
 | BI | **Power BI Desktop** | Có What-if parameters; lưu dạng `.pbip` để đưa lên git |
@@ -74,7 +74,7 @@
 ## 4. Những gì đã chỉnh so với bản mô tả gốc
 
 1. **Timeline**: bản gốc chia Week 1/2/3 + Stretch → nén thành 14 ngày, chia việc theo mức ưu tiên MUST / SHOULD / COULD.
-2. **Tech stack thống nhất**: sơ đồ ban đầu đặt Spark ở Silver nhưng phần ETL lại dùng dbt trong PostgreSQL → chốt dbt + PostgreSQL. Landing zone là nơi lưu (MinIO), Airflow là bộ điều phối — hai thứ khác nhau.
+2. **Tech stack thống nhất**: sơ đồ ban đầu đặt Spark ở Silver nhưng phần ETL lại dùng dbt trong PostgreSQL → chốt dbt + PostgreSQL. Landing zone là nơi lưu (data lake: MinIO, từ 01/11 đổi sang Azure Blob), Airflow là bộ điều phối — hai thứ khác nhau.
 3. **Không cho ML ghi vào Gold**: ML đọc `dw`, ghi `ml`; Power BI đọc `bi`. Segment khách được nối ở `bi`, tránh vòng phụ thuộc.
 4. **Khoá thay thế ổn định**: dùng khoá số sinh từ hàm băm natural key, để load incremental không làm đổi key.
 5. **Seller chốt deal nhưng chưa bán** vẫn có trong `dim_seller` (thay vì rơi vào "unknown").
@@ -89,7 +89,7 @@ Phân công đã chốt (30/10/2026).
 
 | Vai trò | Thành viên | Phạm vi | Trang Power BI |
 | --- | --- | --- | --- |
-| TV1 — Data Platform & Orchestration | **Ngọc Cẩn** | Docker, MinIO, PostgreSQL, ingestion, Airflow, metadata, replay | — |
+| TV1 — Data Platform & Orchestration | **Ngọc Cẩn** | Docker, data lake (Azure Blob), PostgreSQL, ingestion, Airflow, metadata, replay | — |
 | TV2 — Staging, Dimensions & Data Quality | **Minh Hiếu** | Profiling, dbt staging, 10 dimension, SCD2 seller, funnel, tests | — |
 | TV3 — Facts, Data Marts & BI | **Xuân Vinh** | Fact chính, đối soát, schema `bi`, KPI dictionary, Power BI | 1, 3, 5, 6, 8 |
 | TV4 — ML & Decision Support, trưởng báo cáo | **Trường An** | EDA khả thi, mô hình, what-if, đề xuất, ghép báo cáo | 2, 4, 7 |
@@ -102,7 +102,7 @@ Mọi người cùng: viết phần báo cáo của mình, review PR của ngư�
 2. Tạo Kaggle API token (Kaggle → Settings → Create New Token) và **bấm chấp nhận điều khoản** ở trang 2 dataset.
 3. Clone repo → `cp .env.example .env`. Dữ liệu nguồn đã có sẵn trong `data/raw/` của repo, không cần Kaggle key.
 4. `uv sync` (tạo `.venv` theo `uv.lock`, giống hệt trên 4 máy; không cần activate vì Makefile dùng `uv run`).
-5. `make up` → `make ingest` → `make load-raw` → mở DBeaver kiểm tra schema `raw` có 11 bảng Kaggle + IBGE (2) + holidays + br_states + calendar_events (16 bảng).
+5. `make up` → `make ingest` → `make load-raw` → mở DBeaver kiểm tra schema `raw` có 11 bảng Kaggle + holidays + br_states + calendar_events (14 bảng).
 6. Ai làm Power BI (TV3, TV4) cần máy **Windows** với Power BI Desktop; kết nối PostgreSQL `localhost:5432`, database `olist_dw`, chỉ chọn schema `bi`.
 
 ---
@@ -111,15 +111,15 @@ Mọi người cùng: viết phần báo cáo của mình, review PR của ngư�
 
 **Mục tiêu**: ai clone repo về cũng chạy được `make all`; dữ liệu đi từ Kaggle tới `raw` có nhật ký; Airflow chạy được cả chuỗi để demo.
 
-**Cài thêm**: Docker images `postgres:16`, `minio/minio`, `minio/mc`, `apache/airflow` (pin 1 version, python 3.11); Python: `kaggle`, `boto3`, `psycopg[binary]`, `requests`, `holidays`.
+**Cài thêm**: Docker images `postgres:16`, `mcr.microsoft.com/azure-storage/azurite`, `apache/airflow` (pin 1 version, python 3.11); Python: `kaggle`, `azure-storage-blob`, `psycopg[binary]`, `requests`, `holidays`.
 
 | ID | Ưu tiên | Việc | Kết quả / Done khi |
 | --- | --- | --- | --- |
 | P1 | MUST | Khung repo (cấu trúc thư mục theo CLAUDE.md mục 4), `.gitignore`, `.env.example`, Makefile, README quickstart | Thành viên khác clone và làm theo README không cần hỏi |
-| P2 | MUST | `docker-compose.yml`: postgres (script init tạo DB `olist_dw`, `airflow`, các schema raw/stg/dw/bi/ml/meta), minio + minio-init tạo bucket `olist-lake` | `make up` chạy; console MinIO ở :9001 thấy bucket |
+| P2 | MUST | `docker-compose.yml`: postgres (script init tạo DB `olist_dw`, `airflow`, các schema raw/stg/dw/bi/ml/meta), azurite (Azure Blob giả lập) | `make up` chạy; `make ingest` tạo container `olist-lake` (xem bằng Azure Storage Explorer) |
 | P3 | MUST | `download_kaggle.py`: tải 2 dataset, giải nén vào `landing/kaggle/<dataset>/extract_date=YYYY-MM-DD/` | 11 CSV đúng chỗ |
-| P4 | MUST | `fetch_ibge.py` (bang, municipality; lưu JSON dự phòng vào `data/fallback/`), `gen_holidays.py` (lễ Brazil 2016–2019 → CSV) | File trong landing |
-| P5 | MUST | `upload_to_lake.py` (local → MinIO); `load_raw.py` (MinIO → `raw.*`, mọi cột text, thêm `_batch_id`, `_loaded_at`, `_source_file`, ghi `meta.etl_run_log`) | Số dòng raw = số dòng CSV; log có bản ghi |
+| P4 | MUST | `gen_holidays.py` (lễ Brazil 2016–2019 → CSV); bang & vùng lấy từ `br_states.csv` (không gọi IBGE API, xem CLAUDE.md mục 2.3) | File trong landing |
+| P5 | MUST | `upload_to_lake.py` (local → Azure Blob); `load_raw.py` (Azure Blob → `raw.*`, mọi cột text, thêm `_batch_id`, `_loaded_at`, `_source_file`, ghi `meta.etl_run_log`) | Số dòng raw = số dòng CSV; log có bản ghi |
 | P6 | SHOULD | Airflow: Dockerfile (cài dbt trong venv riêng), DAG `olist_pipeline` (thứ tự ở CLAUDE.md mục 15), callback ghi log | Trigger DAG trên UI :8080 chạy xanh từ đầu đến cuối |
 | P7 | SHOULD | `scripts/replay_month.py --month YYYY-MM` (cùng TV3 làm F8) | Demo: nạp thêm 1 tháng, fact cập nhật, Power BI refresh thấy thay đổi |
 | P8 | MUST | DDL bảng `meta.*`; `meta_publish.py`: đọc `run_results.json` → `meta.dq_results`, đọc manifest → `meta.data_dictionary`, `meta.source_to_target` | Trang DQ (trang 8) có dữ liệu |
@@ -140,7 +140,7 @@ Mọi người cùng: viết phần báo cáo của mình, review PR của ngư�
 | --- | --- | --- | --- |
 | S1 | MUST | **Profiling** (notebook trên `raw`): giá trị order_status, payment_type; review trùng; geolocation (điểm/zip, ngoài Brazil, dấu); category thiếu; zip mất số 0 đầu; chênh lệch tiền hàng vs thanh toán; tỷ lệ seller funnel khớp; khoảng thời gian dữ liệu | `docs/profiling.md` + cập nhật bảng giả định A1–A9 trong CLAUDE.md. **Xong ngày 2** |
 | S2 | MUST | Khởi tạo dbt project, `sources.yml`, macro `generate_schema_name`, `int_sk`; seeds: `category_group`, `seller_tier_rules`, `br_state_population`, `order_status_map`, `instalment_band` | `dbt seed` chạy |
-| S3 | MUST | Model `stg_*` cho 11 bảng + IBGE + holidays theo rule CLAUDE.md mục 9; `int_customer_map` | `dbt build --select staging` xanh |
+| S3 | MUST | Model `stg_*` cho 11 bảng + br_states + calendar_events + holidays theo rule CLAUDE.md mục 9; `int_customer_map` | `dbt build --select staging` xanh |
 | S4 | MUST | `dim_date`, `dim_geography`, `dim_product`, `dim_customer`, `dim_order_status`, `dim_payment_type` (có dòng unknown -1) | Có test unique/not_null; TV3 join được |
 | S5 | SHOULD | `dim_lead_origin`, `dim_lead_profile`, `dim_sales_rep`, `fact_lead_funnel` | Conversion theo origin tính được |
 | S6 | SHOULD (bản tạm MUST) | Ngày 3: đưa ra `dim_seller` bản Type 1 tạm để TV3 không bị chặn. Sau đó: `int_seller_month_metrics` → `int_seller_tier_monthly` → `int_seller_tier_versions` → `dim_seller` SCD2 | Test: 1 version current / seller, không chồng thời gian, tra cứu theo ngày ra đúng 1 version |
@@ -262,10 +262,9 @@ TV1 = Ngọc Cẩn · TV2 = Minh Hiếu · TV3 = Xuân Vinh · TV4 = Trường A
 
 | Rủi ro | Dự phòng |
 | --- | --- |
-| Máy yếu không chạy nổi Airflow + Postgres + MinIO | Chỉ cần Airflow trên 1 máy để demo; những máy khác chạy `make all`; MinIO có thể thay bằng thư mục local |
+| Máy yếu không chạy nổi Airflow + Postgres + Azurite | Chỉ cần Airflow trên 1 máy để demo; những máy khác chạy `make all`; Azurite rất nhẹ |
 | Thành viên dùng macOS không có Power BI | Giao Power BI cho thành viên dùng Windows, hoặc dùng máy lab/VM |
 | Kaggle tải lỗi | Tải zip thủ công trên web, giải nén vào `data/raw/ecom_dataset/` và `data/raw/marketing_funnel/` — `make ingest` tự ưu tiên file ở đây |
-| IBGE API lỗi | Dùng JSON đã lưu trong `data/fallback/` |
 | Mô hình ML kết quả kém | Báo cáo trung thực, so với baseline, giải thích nguyên nhân từ dữ liệu — vẫn có điểm |
 | Xung đột file Power BI | Một chủ file (TV3 — Xuân Vinh), dùng `.pbip`, chia trang rõ ràng |
 | Thiết kế đổi giữa chừng | Mọi thay đổi đi qua CLAUDE.md và báo nhóm trước |

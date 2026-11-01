@@ -2,7 +2,7 @@
 .env
 kaggle.json
 
-# Dữ liệu: data/raw/ và data/fallback/ ĐƯỢC commit để cả nhóm dùng chung.
+# Dữ liệu: data/raw/ ĐƯỢC commit để cả nhóm dùng chung.
 # data/landing/ là cache sinh lại được bằng `make ingest` → không commit.
 data/landing/*
 !data/landing/.gitkeep

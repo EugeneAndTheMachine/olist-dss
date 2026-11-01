@@ -55,7 +55,7 @@ data/raw/
 └── events_brazilstates/     # br_states.csv, calendar_events.csv (file nhóm chuẩn bị)
 ```
 
-Chỉ `data/raw/` và `data/fallback/` được commit; `data/landing/` là cache sinh lại bằng `make ingest` nên bị bỏ qua.
+Chỉ `data/raw/` được commit; `data/landing/` là cache sinh lại bằng `make ingest` nên bị bỏ qua.
 File lớn nhất (`olist_geolocation_dataset.csv`, ~61 MB) vượt mức cảnh báo 50 MB của GitHub nhưng dưới giới hạn cứng 100 MB → push vẫn được, chỉ hiện cảnh báo.
 
 **Cách B — Kaggle API** (khi `data/raw/` thiếu file):
@@ -64,28 +64,43 @@ File lớn nhất (`olist_geolocation_dataset.csv`, ~61 MB) vượt mức cảnh
    - https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
    - https://www.kaggle.com/datasets/olistbr/marketing-funnel-olist
 
-IBGE API lỗi mạng → script tự dùng `data/fallback/ibge_*.json` (được commit sau lần chạy thành công đầu tiên).
+Bang & vùng Brazil lấy từ `data/raw/events_brazilstates/br_states.csv`; mã IBGE và dân số theo bang nằm trong seed dbt `br_state_population`. Không gọi API IBGE (API này chặn IP ngoài Brazil).
 
-## 5. Dựng hạ tầng (PostgreSQL + MinIO)
+## 5. Dựng hạ tầng (PostgreSQL + data lake Azure Blob)
+
+> Data lake trước đây là MinIO. MinIO đã ngừng phát hành Docker image bản community (10/2025) và repo chuyển sang maintenance mode,
+> nên nhóm đổi sang **Azure Blob Storage**. Code dùng SDK `azure-storage-blob` và chạy được với 2 backend, chỉ khác `AZURE_STORAGE_CONNECTION_STRING` trong `.env`:
+>
+> | Backend | Dùng khi | Chi phí |
+> | --- | --- | --- |
+> | **Azurite** (mặc định): giả lập Azure Storage chính chủ Microsoft, chạy trong Docker | Dev hằng ngày trên cả 4 máy, offline | 0 |
+> | **Azure Storage account thật** (ADLS Gen2) | 1 máy demo / Airflow, chụp hình cho báo cáo | Vài cent trong $100 credit Azure for Students |
 
 ```bash
 make up
-docker compose ps        # postgres, minio: healthy; minio-init: exited (0)
+docker compose ps        # postgres, azurite: healthy
 ```
 
 | Dịch vụ | Địa chỉ | Đăng nhập |
 | --- | --- | --- |
 | PostgreSQL | `localhost:5432`, DB `olist_dw` | `olist` / `olist` |
-| MinIO console | http://localhost:9001 | `minioadmin` / `minioadmin` |
-| MinIO API (S3) | http://localhost:9000 | như trên |
+| Azurite Blob | `http://127.0.0.1:10000/devstoreaccount1`, container `olist-lake` | connection string mặc định trong `.env.example` |
+
+Xem file trên lake (Azurite hoặc Azure thật): cài [Azure Storage Explorer](https://azure.microsoft.com/products/storage/storage-explorer/) → *Connect* → *Local storage emulator* (Azurite) hoặc *Storage account → Connection string* (Azure thật). Container `olist-lake` do `upload_to_lake` tự tạo ở lần chạy đầu.
 
 Script trong `docker/postgres/init/` **chỉ chạy lần đầu** khi volume trống. Đã sửa script init → `make down && docker volume rm olist-dss_pgdata && make up` (mất dữ liệu DB), hoặc `make reset-db`.
+
+## 5b. (Tuỳ chọn) Dùng Azure Storage thật với Azure for Students
+
+Hướng dẫn từng bước (tạo Storage account ADLS Gen2, lấy connection string / SAS cho nhóm, kiểm tra, chi phí, Azure CLI, xử lý sự cố): **[`docs/AZURE_SETUP.md`](AZURE_SETUP.md)**.
+
+Tóm tắt: 1 người tạo Storage account → mỗi máy dán connection string vào `AZURE_STORAGE_CONNECTION_STRING` trong `.env` → 1 máy `make ingest`, mọi máy `make load-raw`. Quay về Azurite: lấy lại dòng đó từ `.env.example`.
 
 ## 6. Chạy pipeline
 
 ```bash
-make ingest      # data/raw hoặc Kaggle + IBGE + holidays → data/landing → MinIO
-make load-raw    # MinIO → schema raw (+ meta.etl_run_log)
+make ingest      # data/raw hoặc Kaggle + holidays → data/landing → Azure Blob (Azurite)
+make load-raw    # Azure Blob → schema raw (+ meta.etl_run_log)
 make dbt-deps    # tạo dbt/olist_dw/profiles.yml từ profiles.example.yml, cài dbt_utils
 make seed
 make build       # dbt build: stg → dw → bi (+ tests)
@@ -97,7 +112,7 @@ Hoặc một lệnh: `make all`.
 Kiểm tra trong DBeaver/psql:
 
 ```sql
-select table_name from information_schema.tables where table_schema = 'raw' order by 1;   -- 16 bảng
+select table_name from information_schema.tables where table_schema = 'raw' order by 1;   -- 14 bảng
 select count(*) from raw.orders;                                                          -- ~99 441
 select step, status, rows_out, message from meta.etl_run_log order by log_id desc limit 20;
 ```
@@ -116,7 +131,7 @@ docker compose logs -f airflow          # chờ "Airflow is ready"
 
 - UI: http://localhost:8080 — đăng nhập `AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD` trong `.env` (mặc định `admin` / `admin`).
 - DAG `olist_pipeline` mặc định **paused** → bật rồi bấm *Trigger DAG*.
-- Container mount cả repo vào `/opt/olist`; trong container `POSTGRES_HOST=postgres`, `MINIO_ENDPOINT=http://minio:9000` (docker-compose ghi đè `.env`).
+- Container mount cả repo vào `/opt/olist`; trong container `POSTGRES_HOST=postgres`, `AZURITE_HOST=azurite` (docker-compose ghi đè `.env`; `ingestion/lake.py` tự đổi `127.0.0.1:10000` → `azurite:10000`, connection string Azure thật giữ nguyên).
 - dbt chạy trong venv riêng `/opt/airflow/dbt_venv`.
 - Máy yếu: không cần Airflow, dùng `make all`.
 
@@ -134,7 +149,10 @@ Mở terminal ở thư mục gốc repo → `claude`. Claude tự đọc `CLAUDE
 | Triệu chứng | Cách xử lý |
 | --- | --- |
 | `make: command not found` | Cài make (mục 1) rồi mở lại Git Bash, hoặc chạy lệnh tương ứng trong `Makefile` bằng tay |
-| `docker compose up` báo `pull access denied` / `manifest unknown` cho MinIO | Tag MinIO bị gỡ khỏi Docker Hub. Đổi `MINIO_IMAGE` / `MC_IMAGE` trong `.env` sang tag khác còn tồn tại (vd. `quay.io/minio/minio:<tag>`), hoặc `latest` |
+| `docker compose up` không pull được Azurite | Đổi `AZURITE_IMAGE` trong `.env` sang tag khác ở `mcr.microsoft.com/azure-storage/azurite` (vd. `latest`) |
+| `ResourceNotFoundError` / `AuthenticationFailed` khi upload | Sai connection string; Azurite chưa chạy (`docker compose ps`); SAS hết hạn hoặc thiếu quyền Create/Write |
+| `The API version ... is not supported by Azurite` | Đã chặn bằng `--skipApiVersionCheck` trong docker-compose; nếu vẫn lỗi, nâng `AZURITE_IMAGE` |
+| `RequestDisallowedByAzure` khi tạo storage account | Subscription sinh viên giới hạn region, xem mục 5b bước 3 |
 | `unauthorized: authentication required` khi pull | `docker login` (tài khoản Docker Hub miễn phí) rồi chạy lại |
 | `port is already allocated` (5432/9000/8080) | Đổi `POSTGRES_PORT` trong `.env`, hoặc tắt dịch vụ đang chiếm cổng |
 | Kaggle `403 Forbidden` | Chưa accept rules của dataset trên web (mục 4) |
