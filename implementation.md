@@ -44,9 +44,9 @@ Olist là "marketplace của các marketplace" ở Brazil: seller đăng sản p
 
 ### 1.3 Lưu ý khả thi (phải xác nhận ở profiling S1, rồi sửa mục này)
 
-- **Lặp mua rất thấp**: phần lớn `customer_unique_id` chỉ có 1 đơn → mô hình "giữ chân khách" sẽ yếu. CRM được đặt lại thành: phân khúc theo RFM + trải nghiệm (giao trễ, review thấp) và phân bổ voucher theo **giả định uplift** (tham số what-if), không phải uplift học từ dữ liệu.
-- **Funnel**: chỉ ~842 deal chốt trên ~8k MQL. Thuộc tính profile (business_segment, lead_type, …) **chỉ tồn tại cho lead đã chốt** → không được dùng làm feature dự đoán conversion. Số seller chốt deal có đơn hàng trong dataset e-commerce có thể ít, cửa sổ quan sát sau khi chốt ngắn → `gmv_first_90_days` có thể thưa.
-- **Chuỗi thời gian**: đơn hàng 2016 rất thưa, các tháng cuối 2018 bị cắt. Cửa sổ phân tích mặc định 2017-01-01 → 2018-08-31 (xác nhận ở S1). Forecast chỉ có ~20 điểm tháng → dùng mô hình đơn giản + baseline.
+- **Lặp mua rất thấp** (đã xác nhận S1: 3.04% khách có ≥ 2 đơn): phần lớn `customer_unique_id` chỉ có 1 đơn → mô hình "giữ chân khách" sẽ yếu. CRM được đặt lại thành: phân khúc theo RFM + trải nghiệm (giao trễ, review thấp) và phân bổ voucher theo **giả định uplift** (tham số what-if), không phải uplift học từ dữ liệu.
+- **Funnel**: chỉ ~842 deal chốt trên ~8k MQL (đã xác nhận S1: 842 / 8,000; chỉ 380 seller chốt có đơn hàng, 324 deal có GMV trong 90 ngày đầu). Thuộc tính profile (business_segment, lead_type, …) **chỉ tồn tại cho lead đã chốt** → không được dùng làm feature dự đoán conversion. Số seller chốt deal có đơn hàng trong dataset e-commerce có thể ít, cửa sổ quan sát sau khi chốt ngắn → `gmv_first_90_days` có thể thưa.
+- **Chuỗi thời gian**: đơn hàng 2016 rất thưa, các tháng cuối 2018 bị cắt. Cửa sổ phân tích mặc định 2017-01-01 → 2018-08-31 (đã xác nhận S1: 99.65% đơn nằm trong cửa sổ). Forecast chỉ có ~20 điểm tháng → dùng mô hình đơn giản + baseline.
 
 ---
 
@@ -334,7 +334,7 @@ Bốn bước Kimball: chọn business process → khai báo grain → chọn di
 | --- | --- | --- | --- | --- |
 | dim_date | 1 ngày, 2016-01-01 → 2019-12-31; `date_key` YYYYMMDD | full_date, day_name, day_of_week_no, is_weekend, iso_week, month_no, month_name, quarter, year, year_month, is_br_holiday, holiday_name, is_black_friday_week | day → week; day → month → quarter → year | Sinh 1 lần bằng `dbt_utils.date_spine`; holiday join từ `stg_br_holidays` |
 | dim_customer | 1 người: NK `customer_unique_id` | first_order_date_key, first_order_state, customer_geo_key (zip của đơn đầu), order_count_lifetime | none | Type 1. **Không** chứa segment (segment ở `bi.v_dim_customer` join `ml`, tránh vòng phụ thuộc dw ↔ ml) |
-| dim_product | 1 product_id | category_pt, category_en, category_group (~10 nhóm, seed), photos_qty, name_length, description_length, weight_g, length_cm, height_cm, width_cm, volume_cm3, weight_band, size_band | product → category → category_group | Type 1 |
+| dim_product | 1 product_id | category_pt, category_en, category_group (11 nhóm + Unknown, seed), photos_qty, name_length, description_length, weight_g, length_cm, height_cm, width_cm, volume_cm3, weight_band, size_band | product → category → category_group | Type 1 |
 | dim_seller | 1 phiên bản seller: NK seller_id + valid_from | seller_id, seller_geo_key, seller_tier (New, Bronze, Silver, Gold, At-risk, Unscored), tier_rule_version, valid_from, valid_to, is_current, has_sales, is_from_funnel | seller → state → region (qua geography) | **Type 2 trên seller_tier**; Type 1 trên các cột khác. Tập seller = sellers ∪ closed_deals.seller_id (seller chốt deal nhưng chưa bán vẫn có key) |
 | dim_geography | 1 zip prefix 5 số | zip_prefix, city (bỏ dấu), state_code, state_name, region_name (5 vùng), latitude, longitude (trung bình điểm), ibge_state_id, state_population | zip → city → state → region | Type 1. Role-playing: customer geo, seller geo. Tập zip = geolocation ∪ customers ∪ sellers; zip thiếu toạ độ → lat/lng null, state lấy từ bảng customer/seller |
 | dim_payment_type | Junk: payment_type × instalment_band | payment_type, instalment_band (1, 2–3, 4–6, 7–10, 11+), is_instalment | none | Static (seed `instalment_band`) |
@@ -405,10 +405,10 @@ Lags (ngày, dạng numeric có phần lẻ): approval_lag = approved − purcha
 - **Reviews**: giữ mọi dòng; `is_latest_for_order` theo review_answer_timestamp (hoà → review_creation_date, rồi review_id); review_id xuất hiện ở nhiều đơn → giữ, khoá fact là (review_id, order_id).
 - **Payments**: payment_installments 0 → 1; ghi nhận các dòng payment_type `not_defined`.
 - **Customers**: map customer_id → customer_unique_id (`int_customer_map`).
-- **Geolocation**: gộp về 1 dòng / zip prefix (mean lat/lng, city & state xuất hiện nhiều nhất), bỏ dấu (unidecode/`unaccent` extension) + lower case, loại điểm ngoài bounding box Brazil (lat −34 → 5.5; lng −74 → −34).
+- **Geolocation**: gộp về 1 dòng / zip prefix (mean lat/lng, city & state xuất hiện nhiều nhất), bỏ dấu (unidecode/`unaccent` extension) + lower case, loại điểm ngoài bounding box Brazil (lat −34 → 5.5; lng −74 → −28: cận lng −28 để giữ Fernando de Noronha, lng −32.4, xem profiling A3).
 - **Products**: category null → `unknown`; join translation (category thiếu bản dịch → giữ tên PT); sửa cột `lenght` → `length`; volume_cm3 = L×H×W; weight_band, size_band theo seed hoặc CASE.
 - **States/cities**: khớp mã bang 2 ký tự Olist với `state_code` của `br_states` và seed `br_state_population`; bỏ dấu tên city (city lấy từ geolocation/customers/sellers, không có danh mục municipality).
-- **Funnel**: parse dates, dedup theo mql_id, test tỷ lệ khớp seller_id với sellers; average_stock → stock_band.
+- **Funnel**: parse dates, dedup theo mql_id, origin NULL → `unknown`, test tỷ lệ khớp seller_id với sellers (profiling: 45.1%); average_stock → stock_band.
 - **Holidays**: `stg_br_holidays(date, holiday_name)`.
 
 Intermediate models (schema `stg`): `int_customer_map`, `int_order_primary_seller`, `int_order_agg` (item_count, order_value, freight_total, max shipping_limit), `int_seller_month_metrics`, `int_seller_tier_monthly`, `int_seller_tier_versions`.
@@ -441,7 +441,7 @@ Intermediate models (schema `stg`): `int_customer_map`, `int_order_primary_selle
 | --- | --- |
 | Schema (dbt generic) | unique + not_null mọi key; relationships từ mọi FK fact → dim; accepted_values cho order_status, payment_type, seller_tier |
 | Business rule (singular) | delivered không trước purchase; review_score ∈ [1,5]; đúng 1 version current / seller; không chồng version; mọi fact có key -1 < 1% (warn) |
-| Reconciliation | row count raw → stg → dw (chênh lệch giải thích bằng filter có ghi chép); Σ item_total theo đơn ≈ Σ payment_value (ngưỡng tolerance đặt theo profiling, severity warn); fact_order_fulfillment đúng 1 dòng / order trong orders; Σ fact_seller_month = Σ fact_order_item cùng tháng |
+| Reconciliation | row count raw → stg → dw (chênh lệch giải thích bằng filter có ghi chép); Σ item_total theo đơn ≈ Σ payment_value (tolerance 0.01 BRL / đơn; severity warn khi > 0.5% đơn lệch — profiling A5: 0.31%, chủ yếu lãi trả góp); fact_order_fulfillment đúng 1 dòng / order trong orders; Σ fact_seller_month = Σ fact_order_item cùng tháng |
 
 ### 11.2 Metadata
 
@@ -563,7 +563,7 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - [ ] P9 MUST dbt docs + lineage figure; `make all` chạy sạch trên máy mới
 
 ### S — Staging, Dimensions, Data Quality (TV2 — Minh Hiếu)
-- [ ] S1 MUST Profiling → docs/profiling.md (xác nhận mục 1.3, 7.4 seed, 9, tolerance item vs payment)
+- [~] S1 MUST Profiling → docs/profiling.md (xác nhận mục 1.3, 7.4 seed, 9, tolerance item vs payment)
 - [~] S2 MUST dbt project init, sources.yml, macros (generate_schema_name, int_sk), seeds
 - [ ] S3 MUST stg_* cho 11 file + br_states + calendar_events + holidays; int_customer_map
 - [ ] S4 MUST dim_date, dim_geography, dim_product, dim_customer, dim_order_status, dim_payment_type
@@ -601,15 +601,15 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 
 | # | Giả định | Trạng thái |
 | --- | --- | --- |
-| A1 | Danh sách order_status và payment_type như mục 7.4 / 9 | chưa xác nhận |
-| A2 | review_id trùng trên nhiều order và order có nhiều review | chưa xác nhận |
-| A3 | Geolocation nhiều điểm / zip, có điểm ngoài Brazil, city có dấu không đồng nhất | chưa xác nhận |
-| A4 | Có product thiếu category / thiếu bản dịch | một phần: `pc_gamer`, `portateis_cozinha_e_preparadores_de_alimentos` không có trong bảng dịch; category rỗng chưa đếm |
-| A5 | Chênh lệch Σ item_total vs Σ payment_value theo đơn → tolerance | chưa đo |
-| A6 | Tỷ lệ seller_id closed_deals khớp sellers | chưa đo |
-| A7 | Tỷ lệ khách mua lặp lại | chưa đo |
-| A8 | Cửa sổ phân tích 2017-01-01 → 2018-08-31 | chưa xác nhận |
-| A9 | Zip prefix trong CSV có mất số 0 đầu hay không | chưa xác nhận |
+| A1 | Danh sách order_status và payment_type như mục 7.4 / 9 | **xác nhận**: 8 status khớp seed `order_status_map`; 5 payment_type gồm `not_defined` (3 dòng, value 0, đơn canceled); 2 dòng installments = 0 |
+| A2 | review_id trùng trên nhiều order và order có nhiều review | **xác nhận**: 789 review_id gắn 2–3 đơn (nội dung giống hệt, cùng khách); 547 đơn có 2–3 review; (review_id, order_id) duy nhất; không hoà answer_timestamp |
+| A3 | Geolocation nhiều điểm / zip, có điểm ngoài Brazil, city có dấu không đồng nhất | **xác nhận**: trung vị 29 điểm / zip; 21 zip có điểm ngoài bbox; 7.3% dòng city có dấu. Bbox nới lng tới −28 (mục 9). Mở: 35 seller có `seller_state` khác bang của zip — nhóm chốt nguồn state |
+| A4 | Có product thiếu category / thiếu bản dịch | **xác nhận**: 610 product rỗng category (1.42% item); 2 category thiếu bản dịch (13 product); seed `category_group` phủ đủ 73 category |
+| A5 | Chênh lệch Σ item_total vs Σ payment_value theo đơn → tolerance | **đã đo**: 99.69% đơn khớp ≤ 0.01 BRL; 303 đơn lệch (88% do lãi trả góp). Tolerance 0.01 BRL / đơn, warn > 0.5% đơn (mục 11.1) |
+| A6 | Tỷ lệ seller_id closed_deals khớp sellers | **đã đo**: 45.1% (380 / 842); `gmv_first_90_days` có giá trị cho 324 deal |
+| A7 | Tỷ lệ khách mua lặp lại | **đã đo**: 3.04% (2,888 / 94,990 khách, đơn counts_as_sale); 2.17% nếu tính theo ngày mua khác nhau |
+| A8 | Cửa sổ phân tích 2017-01-01 → 2018-08-31 | **xác nhận**: 99.65% đơn trong cửa sổ; 2016 = 329 đơn, 9–10/2018 = 20 đơn |
+| A9 | Zip prefix trong CSV có mất số 0 đầu hay không | **không mất**: mọi zip đủ 5 ký tự (CSV để trong ngoặc kép, nạp dạng text); vẫn giữ `lpad` phòng hờ |
 
 ---
 
@@ -630,4 +630,5 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - 2026-10-30: Thêm `data/raw/` làm nơi đặt CSV tải tay (ingestion ưu tiên trước Kaggle API); thêm nguồn raw.br_states, raw.calendar_events (`copy_manual.py`).
 - 2026-10-30: Dựng khung repo (P1) + khung P2–P6, P8, S2, M2; Airflow là compose profile `airflow` (bật bằng `make up-airflow`); dbt docs serve cổng 8081.
 - 2026-10-30: Chuyển môi trường Python sang uv (`pyproject.toml` + `uv.lock`, `.python-version` 3.11); Makefile gọi `uv run`; `requirements.txt` sinh từ lock. Thêm `PYTHONUTF8=1` cho dbt trên Windows.
+- 2026-11-01: Sau profiling S1 (`docs/profiling.md`): cập nhật mục 18 (A1–A9), mục 1.3 thêm số liệu xác nhận; bbox geolocation nới lng −74 → −28 (giữ Fernando de Noronha); tolerance reconciliation item vs payment = 0.01 BRL / đơn, warn > 0.5% đơn; origin NULL → `unknown`; category_group = 11 nhóm + Unknown.
 - 2026-10-30: `data/raw/` được commit lên repo để cả nhóm dùng chung (chỉ `data/landing/` bị ignore).
