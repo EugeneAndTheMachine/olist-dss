@@ -1,6 +1,6 @@
 version: 2
 
-# S4 xong 01/11; dim_seller là bản tạm Type 1 (S6 thay SCD2). Còn: dim_lead_* (S5)
+# S4 xong 01/11; dim_seller là bản tạm Type 1 (S6 thay SCD2). dim_lead_* xong 02/11 (S5)
 models:
   - name: dim_date
     description: "1 dòng / ngày 2016-01-01 → 2019-12-31, khoá YYYYMMDD; dòng -1 cho sự kiện chưa xảy ra."
@@ -220,3 +220,72 @@ models:
         description: "Seller có ít nhất 1 item đã bán"
       - name: is_from_funnel
         description: "Seller đến từ marketing funnel (có trong closed_deals)"
+
+  - name: dim_lead_origin
+    description: "1 dòng / cặp origin + landing_page_id (kênh marketing đưa lead tới). Type 1."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [origin, landing_page_id]
+    columns:
+      - name: lead_origin_key
+        description: "Surrogate key (băm từ origin + landing_page_id); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: origin
+        description: "Kênh thu hút lead (organic_search, paid_search, social, …); null ở nguồn → 'unknown'"
+        data_tests: [not_null]
+      - name: landing_page_id
+        description: "Landing page lead đăng ký"
+        data_tests: [not_null]
+
+  - name: dim_lead_profile
+    description: >
+      Junk dimension: tổ hợp thuộc tính hồ sơ seller khai khi chốt deal. Type 1.
+      Chỉ lead đã chốt có hồ sơ → lead chưa chốt dùng -1; không dùng làm feature dự đoán conversion.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            [business_segment, lead_type, lead_behaviour_profile, business_type, has_company, has_gtin, stock_band]
+    columns:
+      - name: lead_profile_key
+        description: "Surrogate key (băm từ 7 thuộc tính); -1 = unknown / lead chưa chốt"
+        data_tests: [unique, not_null]
+      - name: business_segment
+        description: "Ngành hàng seller khai; không khai → 'unknown'"
+        data_tests: [not_null]
+      - name: lead_type
+        description: "Loại lead (online_medium, online_big, industry, offline, …); không khai → 'unknown'"
+        data_tests: [not_null]
+      - name: lead_behaviour_profile
+        description: "Hồ sơ hành vi DISC (cat, eagle, wolf, shark; có thể kết hợp 'cat, wolf'); không khai → 'unknown'"
+        data_tests: [not_null]
+      - name: business_type
+        description: "reseller / manufacturer / other; không khai → 'unknown'"
+        data_tests: [not_null]
+      - name: has_company
+        description: "Có pháp nhân (null = không khai)"
+      - name: has_gtin
+        description: "Sản phẩm có mã GTIN (null = không khai)"
+      - name: stock_band
+        description: "Dải tồn kho khai báo: 1-5, 5-20, 20-50, 50-200, 200+, unknown"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["1-5", "5-20", "20-50", "50-200", "200+", "unknown"]
+      - name: stock_band_sort
+        description: "Thứ tự hiển thị dải tồn kho (unknown = 99)"
+
+  - name: dim_sales_rep
+    description: "1 dòng / cặp sdr_id + sr_id của deal đã chốt. Type 1. Lead chưa chốt → -1."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [sdr_id, sr_id]
+    columns:
+      - name: sales_rep_key
+        description: "Surrogate key (băm từ sdr_id + sr_id); -1 = unknown / lead chưa chốt"
+        data_tests: [unique, not_null]
+      - name: sdr_id
+        description: "Sales development rep — người khai thác, đánh giá lead"
+        data_tests: [not_null]
+      - name: sr_id
+        description: "Sales rep — người chốt deal"
+        data_tests: [not_null]

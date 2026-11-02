@@ -359,12 +359,18 @@ models:
         description: "Sản phẩm có mã GTIN (null = không khai)"
       - name: average_stock
         description: "Dải tồn kho khai báo (1-5, 5-20, 20-50, 50-200, 200+, unknown)"
+      - name: stock_band
+        description: "Dải tồn kho chuẩn hoá cho dim_lead_profile; không khai → 'unknown'"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["1-5", "5-20", "20-50", "50-200", "200+", "unknown"]
       - name: business_type
         description: "reseller / manufacturer / other"
       - name: declared_product_catalog_size
         description: "Số sản phẩm khai báo (tự khai, độ tin thấp)"
       - name: declared_monthly_revenue
-        description: "Doanh thu tháng khai báo (tự khai, độ tin thấp)"
+        description: "Doanh thu tháng khai báo (tự khai, độ tin thấp); 0 → null (797 / 842 deal = 0 → coi là không khai)"
       - name: _batch_id
         description: "Batch nạp raw"
       - name: _loaded_at

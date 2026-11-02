@@ -1,6 +1,6 @@
 version: 2
 
-# F2, F3 (01/11). Còn: fact_seller_month, fact_seller_product_activity (F4), fact_lead_funnel (S5).
+# F2, F3 (01/11). Còn: fact_seller_month, fact_seller_product_activity (F4). fact_lead_funnel: S5 (02/11).
 # Đối soát (F5) ở tests/: assert_reconcile_*, assert_fact_unknown_key_share.
 
 models:
@@ -252,3 +252,79 @@ models:
         description: "Review dùng cho KPI của đơn"
       - name: _dw_loaded_at
         description: "Thời điểm build"
+
+  - name: fact_lead_funnel
+    description: >
+      Accumulating snapshot — 1 dòng / MQL. Mốc first_contact → won → first_sale điền dần (-1 khi chưa xảy ra).
+      Lead chưa chốt có lead_profile_key, sales_rep_key, seller_key = -1.
+      Conversion = Σ is_won / Σ lead_count; so GMV 90 ngày theo kênh chỉ trên has_full_90d_window = 1.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('stg_mql')
+    columns:
+      - name: mql_id
+        description: "Mã lead (degenerate dimension)"
+        data_tests: [unique, not_null]
+      - name: first_contact_date_key
+        description: "Ngày lead liên hệ lần đầu (MQL)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: won_date_key
+        description: "Ngày chốt deal; -1 = chưa chốt"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: first_sale_date_key
+        description: "Ngày mua của đơn counts_as_sale đầu tiên của seller; -1 = chưa bán"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: lead_origin_key
+        description: "Kênh + landing page"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_lead_origin'), field: lead_origin_key}
+      - name: lead_profile_key
+        description: "Hồ sơ seller khai khi chốt; -1 = chưa chốt"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_lead_profile'), field: lead_profile_key}
+      - name: sales_rep_key
+        description: "Cặp SDR + SR; -1 = chưa chốt"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_sales_rep'), field: sales_rep_key}
+      - name: seller_key
+        description: "Version seller hiệu lực tại won_date; -1 = chưa chốt"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: lead_count
+        description: "Luôn = 1 — additive"
+      - name: is_won
+        description: "1 nếu lead đã chốt — additive"
+        data_tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: days_to_close
+        description: "won_date − first_contact_date (ngày); null khi chưa chốt hoặc âm (_dq_issue) — additive, báo cáo = Σ / Σ is_won"
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0}
+      - name: declared_catalog_size
+        description: "Số sản phẩm seller tự khai — additive, độ tin thấp (phần lớn null)"
+      - name: declared_monthly_revenue
+        description: "Doanh thu tháng seller tự khai (BRL) — additive, độ tin thấp; 0 ở nguồn → null"
+      - name: gmv_first_90_days
+        description: "Σ item_price (counts_as_sale) của seller trong [won_date, won_date + 90 ngày); 0 nếu đã chốt mà chưa bán; null nếu chưa chốt"
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0}
+      - name: has_full_90d_window
+        description: "1 nếu đã chốt và won_date + 90 ≤ ANALYSIS_END — chỉ so GMV 90 ngày giữa các kênh trên lead có cờ này"
+        data_tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: _dq_issue
+        description: "Vấn đề dữ liệu: won_before_first_contact (S1: 1 deal)"
+      - name: _dw_loaded_at
+        description: "Thời điểm build"
+      - name: _dw_updated_at
+        description: "Thời điểm cập nhật mốc gần nhất (accumulating snapshot)"

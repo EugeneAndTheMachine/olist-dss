@@ -408,7 +408,7 @@ Lags (ngày, dạng numeric có phần lẻ): approval_lag = approved − purcha
 - **Geolocation**: gộp về 1 dòng / zip prefix (mean lat/lng, city & state xuất hiện nhiều nhất), bỏ dấu (unidecode/`unaccent` extension) + lower case, loại điểm ngoài bounding box Brazil (lat −34 → 5.5; lng −74 → −34).
 - **Products**: category null → `unknown`; join translation (category thiếu bản dịch → giữ tên PT); weight_g = 0 → null; sửa cột `lenght` → `length`; volume_cm3 = L×H×W; weight_band, size_band theo seed hoặc CASE.
 - **States/cities**: khớp mã bang 2 ký tự Olist với `state_code` của `br_states` và seed `br_state_population`; bỏ dấu tên city (city lấy từ geolocation/customers/sellers, không có danh mục municipality).
-- **Funnel**: parse dates, dedup theo mql_id, test tỷ lệ khớp seller_id với sellers (S1: 45,1%); origin null → `unknown`; average_stock → stock_band.
+- **Funnel**: parse dates, dedup theo mql_id, test tỷ lệ khớp seller_id với sellers (S1: 45,1%); origin null → `unknown`; average_stock → stock_band (ngoài 5 dải / null → `unknown`); declared_monthly_revenue = 0 → null (797 / 842 deal = 0, coi là không khai).
 - **Holidays**: `stg_br_holidays(date, holiday_name)`.
 
 Intermediate models (schema `stg`): `int_customer_map`, `int_order_primary_seller`, `int_order_agg` (item_count, order_value, freight_total, max shipping_limit), `int_seller_month_metrics`, `int_seller_tier_monthly`, `int_seller_tier_versions`.
@@ -567,7 +567,7 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - [x] S2 MUST dbt project init, sources.yml, macros (generate_schema_name, int_sk, cleaning, haversine/lag_days), seeds
 - [x] S3 MUST stg_* cho 11 file + br_states + calendar_events + holidays; int_customer_map — 01/11
 - [x] S4 MUST dim_date, dim_geography, dim_product, dim_customer, dim_order_status, dim_payment_type — 01/11
-- [ ] S5 SHOULD dim_lead_origin, dim_lead_profile, dim_sales_rep, fact_lead_funnel
+- [x] S5 SHOULD dim_lead_origin, dim_lead_profile, dim_sales_rep, fact_lead_funnel — 02/11; 8 000 lead, 842 won (10,53%), 667 đủ cửa sổ 90 ngày, khớp profiling
 - [~] S6 SHOULD int_seller_month_metrics, int_seller_tier_monthly, int_seller_tier_versions, dim_seller SCD2 (MUST: bản Type 1 tạm trước để F không bị chặn) — bản tạm xong 01/11 (cấu trúc SCD2, tier Unscored, key = int_sk(seller_id, valid_from)); còn SCD2 thật
 - [~] S7 MUST tests dims + business-rule tests + YAML dictionary cho dims — YAML + test key/FK/accepted_values cho stg và dims, 2 test SCD2 (1 version current, không chồng lấn); còn test point-in-time khi có SCD2
 
@@ -625,6 +625,7 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - 2026-11-01: Bỏ IBGE Localidades API (chặn IP ngoài Brazil). Bang & vùng từ `data/raw/events_brazilstates/br_states.csv`; `ibge_state_id` thêm vào seed `br_state_population`; bỏ `raw.ibge_states`, `raw.ibge_municipalities`, `fetch_ibge.py`, `data/fallback/`. raw còn 14 bảng.
 - 2026-11-01: Cờ trong fact (is_delivered, is_late, is_dispatch_late, is_low_score, has_comment) lưu dạng integer 0/1 để cộng trực tiếp; thêm `fact_order_fulfillment.has_carrier_date` làm mẫu số dispatch late rate. `order_value` = Σ price (không gồm ship), cùng cơ sở với GMV. Postgres container `shm_size: 512mb` (mặc định 64 MB làm lỗi join song song khi build fact).
 - 2026-11-01: Sau profiling S1: chốt tolerance đối soát item vs payment = max(1 BRL, 1%); lag âm → null + `_dq_issue`; weight 0 → null; origin null → `unknown`; thêm `fact_lead_funnel.has_full_90d_window` (won_date kéo dài sau ANALYSIS_END).
+- 2026-11-02: S5 funnel. `first_sale_date_key` và `gmv_first_90_days` chỉ tính đơn counts_as_sale (cùng cơ sở GMV), cửa sổ [won_date, won_date + 90 ngày); lead đã chốt chưa bán → gmv 0, lead chưa chốt → null. seller_key tra version hiệu lực tại won_date. 1 deal won trước first_contact → days_to_close null + `_dq_issue`. stg_closed_deals thêm `stock_band`; declared_monthly_revenue 0 → null.
 - 2026-10-30: Segment khách chuyển từ dw.dim_customer sang bi.v_dim_customer (tránh vòng dw ↔ ml).
 - 2026-10-30: Surrogate key băm từ natural key (ổn định cho incremental).
 - 2026-10-30: dim_seller gồm cả seller từ closed_deals chưa có doanh số (has_sales, is_from_funnel); thêm tier Unscored.
