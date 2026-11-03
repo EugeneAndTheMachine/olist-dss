@@ -1,6 +1,6 @@
 version: 2
 
-# F2, F3 (01/11). Còn: fact_seller_month, fact_seller_product_activity (F4), fact_lead_funnel (S5).
+# F2, F3, F4, S5 (01/11): đủ 7 fact theo bus matrix.
 # Đối soát (F5) ở tests/: assert_reconcile_*, assert_fact_unknown_key_share.
 
 models:
@@ -252,3 +252,136 @@ models:
         description: "Review dùng cho KPI của đơn"
       - name: _dw_loaded_at
         description: "Thời điểm build"
+
+  - name: fact_lead_funnel
+    description: >
+      Accumulating snapshot — 1 dòng / MQL; mốc first_contact → won → first_sale (-1 = chưa xảy ra).
+      Lead conversion = Σ is_won / Σ lead_count. So giá trị kênh chỉ trên lead has_full_90d_window = 1.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('stg_mql')
+    columns:
+      - name: mql_id
+        description: "Mã lead (degenerate dimension)"
+        data_tests: [unique, not_null]
+      - name: first_contact_date_key
+        description: "Ngày liên hệ đầu"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: won_date_key
+        description: "Ngày chốt deal (-1 = chưa chốt)"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: first_sale_date_key
+        description: "Ngày bán đơn đầu tiên của seller (-1 = chưa bán)"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: lead_origin_key
+        description: "Kênh + landing page"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_lead_origin'), field: lead_origin_key}
+      - name: lead_profile_key
+        description: "Hồ sơ lead (-1 = chưa chốt)"
+        data_tests:
+          - relationships: {to: ref('dim_lead_profile'), field: lead_profile_key}
+      - name: sales_rep_key
+        description: "SDR + SR (-1 = chưa chốt)"
+        data_tests:
+          - relationships: {to: ref('dim_sales_rep'), field: sales_rep_key}
+      - name: seller_key
+        description: "Version seller hiệu lực tại ngày chốt (-1 = chưa chốt)"
+        data_tests:
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: lead_count
+        description: "Luôn = 1 — additive"
+      - name: is_won
+        description: "1 nếu lead đã chốt — additive"
+        data_tests:
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: has_first_sale
+        description: "1 nếu seller đã có đơn bán"
+      - name: days_to_close
+        description: "won_date − first_contact_date (ngày); null nếu chưa chốt hoặc chốt trước liên hệ (lỗi nguồn)"
+      - name: declared_product_catalog_size
+        description: "Số sản phẩm seller tự khai — độ tin thấp"
+      - name: declared_monthly_revenue
+        description: "Doanh thu tháng seller tự khai — độ tin thấp"
+      - name: gmv_first_90_days
+        description: "Σ item_price của seller trong 90 ngày kể từ won_date (0 nếu chưa chốt / chưa bán)"
+      - name: has_full_90d_window
+        description: "1 nếu won_date + 90 <= ANALYSIS_END — chỉ so gmv_first_90_days trên các lead này"
+      - name: _dq_issue
+        description: "won_before_contact nếu ngày chốt trước ngày liên hệ đầu"
+      - name: _dw_loaded_at
+        description: "Thời điểm build"
+
+  - name: fact_seller_month
+    description: >
+      Periodic snapshot — 1 seller × 1 tháng, dày đặc từ tháng có đơn đầu tới ANALYSIS_END.
+      seller_key = version hiệu lực ngày cuối tháng. is_active semi-additive (không cộng qua tháng);
+      distinct_customers non-additive. Seller late rate = Σ late_orders / Σ delivered_orders.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [seller_id, month_date_key]
+    columns:
+      - name: month_date_key
+        description: "Ngày đầu tháng (YYYYMMDD)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: seller_id
+        description: "Mã seller (giữ để kiểm tra grain; dùng seller_key khi join)"
+        data_tests: [not_null]
+      - name: seller_key
+        description: "Version seller hiệu lực ngày cuối tháng"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: seller_geo_key
+        description: "Zip của seller"
+        data_tests:
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: orders
+        description: "Đơn counts_as_sale — additive"
+      - name: items
+        description: "Item bán — additive"
+      - name: gmv
+        description: "Σ item_price (đơn counts_as_sale) — additive"
+      - name: delivered_orders
+        description: "Đơn đã giao — additive"
+      - name: late_orders
+        description: "Đơn trễ — additive"
+      - name: cancelled_orders
+        description: "Đơn huỷ — additive"
+      - name: review_count
+        description: "Số review — additive"
+      - name: score_sum
+        description: "Tổng điểm review — additive"
+      - name: is_active
+        description: "1 nếu có ≥ 1 đơn trong tháng — semi-additive (Active sellers nhiều tháng = trung bình)"
+      - name: distinct_customers
+        description: "Số khách khác nhau trong tháng — non-additive"
+      - name: _dw_loaded_at
+        description: "Thời điểm build"
+
+  - name: fact_seller_product_activity
+    description: >
+      Factless fact — 1 seller bán 1 product trong 1 tháng (đơn counts_as_sale, trong cửa sổ phân tích).
+      Đếm dòng = số listing đang hoạt động.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [month_date_key, seller_key, product_key]
+    columns:
+      - name: month_date_key
+        description: "Ngày đầu tháng"
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: seller_key
+        description: "Version seller tại thời điểm bán"
+        data_tests:
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: product_key
+        description: "Sản phẩm"
+        data_tests:
+          - relationships: {to: ref('dim_product'), field: product_key}

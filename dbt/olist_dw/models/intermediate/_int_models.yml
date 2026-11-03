@@ -16,3 +16,112 @@ models:
         description: "Thành phố giao hàng (lower, bỏ dấu)"
       - name: customer_state
         description: "Bang giao hàng"
+
+  - name: int_seller_month_metrics
+    description: >
+      S6 bước 1: seller × tháng (dày đặc từ tháng có đơn đầu tiên đến ANALYSIS_END), đọc từ stg để tránh vòng
+      phụ thuộc với dim_seller. Đơn gán cho mọi seller có item trong đơn; tháng = tháng mua.
+      Cửa sổ trượt 3 tháng cho chấm tier. fact_seller_month dùng lại bảng này.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [seller_id, month_start]
+    columns:
+      - name: seller_id
+        description: "Mã seller"
+        data_tests: [not_null]
+      - name: month_start
+        description: "Ngày đầu tháng"
+        data_tests: [not_null]
+      - name: first_month
+        description: "Tháng có đơn đầu tiên của seller"
+      - name: months_since_first
+        description: "Số tháng kể từ tháng đầu (tháng đầu = 0)"
+      - name: orders
+        description: "Đơn counts_as_sale trong tháng"
+      - name: delivered_orders
+        description: "Đơn đã giao"
+      - name: late_orders
+        description: "Đơn giao trễ"
+      - name: cancelled_orders
+        description: "Đơn huỷ / unavailable"
+      - name: review_count
+        description: "Số review (bản latest) của đơn counts_as_sale"
+      - name: score_sum
+        description: "Tổng điểm review"
+      - name: orders_3m
+        description: "Đơn trong 3 tháng (tháng này + 2 tháng trước)"
+      - name: delivered_3m
+        description: "Đơn đã giao trong 3 tháng"
+      - name: late_3m
+        description: "Đơn trễ trong 3 tháng"
+      - name: review_count_3m
+        description: "Review trong 3 tháng"
+      - name: score_sum_3m
+        description: "Tổng điểm review trong 3 tháng"
+      - name: late_rate_3m
+        description: "late_3m / delivered_3m (null nếu chưa có đơn giao)"
+      - name: avg_score_3m
+        description: "score_sum_3m / review_count_3m (null nếu chưa có review)"
+
+  - name: int_seller_tier_monthly
+    description: >
+      S6 bước 2: tier mỗi seller × tháng theo seed seller_tier_rules (var seller_tier_rule_version).
+      New chỉ theo thâm niên (< 3 tháng); ít đơn (orders_3m < 5) → Bronze; tháng không bán giữ tier tháng trước.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [seller_id, month_start]
+    columns:
+      - name: seller_id
+        description: "Mã seller"
+      - name: month_start
+        description: "Tháng được chấm"
+      - name: rule_version
+        description: "Phiên bản bộ ngưỡng"
+      - name: new_min_months
+        description: "Ngưỡng thâm niên của tier New (từ seed)"
+      - name: orders
+        description: "Đơn trong tháng"
+      - name: orders_3m
+        description: "Đơn 3 tháng"
+      - name: late_rate_3m
+        description: "Tỷ lệ trễ 3 tháng"
+      - name: avg_score_3m
+        description: "Điểm review TB 3 tháng"
+      - name: months_since_first
+        description: "Thâm niên (tháng)"
+      - name: tier_scored
+        description: "Tier chấm từ dữ liệu tháng này; null nếu tháng không có đơn"
+      - name: seller_tier
+        description: "Tier cuối cùng của tháng (sau khi giữ tier tháng trước)"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["New", "Bronze", "Silver", "Gold", "At-risk"]
+
+  - name: int_seller_tier_versions
+    description: >
+      S6 bước 3: version SCD2. Tier tháng M hiệu lực từ đầu tháng M+1; version đầu valid_from = 1900-01-01 tier New;
+      chỉ tạo version khi tier đổi; version cuối valid_to = 9999-12-31.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [seller_id, valid_from]
+    columns:
+      - name: seller_id
+        description: "Mã seller"
+        data_tests: [not_null]
+      - name: version_no
+        description: "Số thứ tự version (1 = đầu tiên)"
+      - name: valid_from
+        description: "Ngày bắt đầu hiệu lực"
+      - name: valid_to
+        description: "Ngày hết hiệu lực"
+      - name: is_current
+        description: "Version hiện hành"
+      - name: seller_tier
+        description: "Tier của version"
+      - name: prev_tier
+        description: "Tier của version trước (dùng cho phân tích tier migration)"
+      - name: rule_version
+        description: "Phiên bản bộ ngưỡng đã chấm"
+      - name: scored_month
+        description: "Tháng có số liệu dẫn tới version này (null cho version đầu)"

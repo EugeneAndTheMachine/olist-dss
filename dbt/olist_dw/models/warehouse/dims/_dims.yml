@@ -1,6 +1,6 @@
 version: 2
 
-# S4 xong 01/11; dim_seller là bản tạm Type 1 (S6 thay SCD2). Còn: dim_lead_* (S5)
+# S4, S5, S6 xong 01/11: đủ 10 dimension, dim_seller là SCD2 trên seller_tier.
 models:
   - name: dim_date
     description: "1 dòng / ngày 2016-01-01 → 2019-12-31, khoá YYYYMMDD; dòng -1 cho sự kiện chưa xảy ra."
@@ -184,9 +184,12 @@ models:
 
   - name: dim_seller
     description: >
-      BẢN TẠM Type 1 (1 version / seller, tier = Unscored) để fact có seller_key; S6 thay bằng SCD2 trên seller_tier.
-      Cấu trúc đã theo SCD2 (valid_from, valid_to, is_current; key băm từ seller_id + valid_from) nên fact không phải sửa.
-      Tập seller = sellers ∪ closed_deals.seller_id.
+      SCD Type 2 trên seller_tier (Type 1 trên các cột khác). Tier tháng M hiệu lực từ đầu tháng M+1;
+      version đầu valid_from = 1900-01-01. Seller chưa bán → 1 version Unscored. Fact tra version bằng
+      event_date between valid_from and valid_to. Tập seller = sellers ∪ closed_deals.seller_id.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [seller_id, valid_from]
     columns:
       - name: seller_key
         description: "Surrogate key (băm từ seller_id + valid_from); -1 = unknown"
@@ -194,6 +197,8 @@ models:
       - name: seller_id
         description: "Mã seller (natural key)"
         data_tests: [not_null]
+      - name: version_no
+        description: "Số thứ tự version của seller (1 = đầu tiên)"
       - name: seller_geo_key
         description: "Zip của seller; -1 cho seller chỉ có trong funnel"
         data_tests:
@@ -202,7 +207,7 @@ models:
               to: ref('dim_geography')
               field: geo_key
       - name: seller_tier
-        description: "New, Bronze, Silver, Gold, At-risk, Unscored (bản tạm: Unscored)"
+        description: "New (< 3 tháng), Bronze, Silver, Gold, At-risk, Unscored (chưa từng bán)"
         data_tests:
           - accepted_values:
               values: ["New", "Bronze", "Silver", "Gold", "At-risk", "Unscored"]
@@ -220,3 +225,55 @@ models:
         description: "Seller có ít nhất 1 item đã bán"
       - name: is_from_funnel
         description: "Seller đến từ marketing funnel (có trong closed_deals)"
+
+  - name: dim_lead_origin
+    description: "1 dòng / cặp kênh marketing (origin) + landing page của MQL. Type 1."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [origin, landing_page_id]
+    columns:
+      - name: lead_origin_key
+        description: "Surrogate key (băm từ origin + landing_page_id); -1 = unknown"
+        data_tests: [unique, not_null]
+      - name: origin
+        description: "Kênh marketing (organic_search, paid_search, social, …); null gốc → unknown"
+        data_tests: [not_null]
+      - name: landing_page_id
+        description: "Landing page lead đăng ký"
+
+  - name: dim_lead_profile
+    description: >
+      Junk dimension thuộc tính hồ sơ lead — CHỈ có cho lead đã chốt. Lead chưa chốt → key -1 (not_won).
+      Không dùng làm feature dự đoán conversion (rò rỉ thông tin).
+    columns:
+      - name: lead_profile_key
+        description: "Surrogate key (băm từ tổ hợp thuộc tính); -1 = lead chưa chốt"
+        data_tests: [unique, not_null]
+      - name: business_segment
+        description: "Ngành hàng seller khai"
+      - name: lead_type
+        description: "Loại lead (online_medium, industry, offline, …)"
+      - name: lead_behaviour_profile
+        description: "Hồ sơ hành vi DISC (cat, eagle, wolf, shark)"
+      - name: business_type
+        description: "reseller / manufacturer / other"
+      - name: has_company
+        description: "Có pháp nhân: true / false / unknown"
+      - name: has_gtin
+        description: "Sản phẩm có GTIN: true / false / unknown"
+      - name: stock_band
+        description: "Dải tồn kho khai báo (1-5, 5-20, 20-50, 50-200, 200+, unknown)"
+
+  - name: dim_sales_rep
+    description: "1 dòng / cặp SDR + SR phụ trách deal. Type 1."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [sdr_id, sr_id]
+    columns:
+      - name: sales_rep_key
+        description: "Surrogate key (băm từ sdr_id + sr_id); -1 = unknown / lead chưa chốt"
+        data_tests: [unique, not_null]
+      - name: sdr_id
+        description: "Sales development rep"
+      - name: sr_id
+        description: "Sales rep"

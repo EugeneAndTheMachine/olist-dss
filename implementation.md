@@ -389,7 +389,7 @@ Mọi DAX measure trong Power BI và mọi query phải dùng đúng định ngh
 | Cancel rate | | đơn status_group = Cancelled / tổng đơn |
 | Repeat customer rate | Khách có ≥2 đơn counts_as_sale / tổng khách | |
 | Lead conversion | | Σ is_won / Σ lead_count |
-| Days to close | won_date − first_contact_date | Σ days_to_close / Σ is_won |
+| Days to close | won_date − first_contact_date | Σ days_to_close / số lead đã chốt có days_to_close (bỏ lead lỗi won_before_contact) |
 | Seller late rate | | Σ late_orders / Σ delivered_orders (fact_seller_month) |
 | Active sellers | Seller có ≥1 đơn trong tháng | Σ is_active trong 1 tháng; nhiều tháng → trung bình theo tháng, không cộng dồn |
 
@@ -418,17 +418,20 @@ Intermediate models (schema `stg`): `int_customer_map`, `int_order_primary_selle
 ## 10. Seller tier — SCD Type 2 (S6)
 
 1. `int_seller_month_metrics` (từ **stg**, không từ fact, để tránh vòng phụ thuộc): mỗi seller × tháng: orders, delivered, late, review_count, score_sum, tính thêm cửa sổ trượt 3 tháng (orders_3m, late_rate_3m, avg_score_3m) để tier không nhảy lung tung.
-2. `int_seller_tier_monthly`: áp rule từ seed `seller_tier_rules` (Seller Quality Manager sửa được; có `rule_version`). Gợi ý v1 (hiệu chỉnh sau profiling):
-   - New: < 3 tháng kể từ đơn đầu hoặc orders_3m < 5
+2. `int_seller_tier_monthly`: áp rule từ seed `seller_tier_rules` (Seller Quality Manager sửa được; có `rule_version`, chọn bằng var `seller_tier_rule_version`). Rule v1 (đã chỉnh 01/11, xem changelog):
+   - New: < 3 tháng kể từ đơn đầu (chỉ theo thâm niên)
+   - Bronze (ít đơn): đủ thâm niên nhưng orders_3m < 5 → chưa đủ dữ liệu chấm At-risk/Silver/Gold
    - At-risk: late_rate_3m ≥ 0.15 hoặc avg_score_3m < 3.5 (với orders_3m ≥ 5)
    - Gold: orders_3m ≥ 50, late_rate_3m < 0.05, avg_score_3m ≥ 4.5
    - Silver: orders_3m ≥ 15, late_rate_3m < 0.08, avg_score_3m ≥ 4.2
    - Bronze: còn lại
-   - Tháng không có đơn: giữ tier tháng trước (không tạo version mới)
+   - Tháng không có đơn: giữ tier tháng trước (không tạo version mới); riêng New hết 3 tháng → Bronze
+   - Thiếu dữ liệu (chưa có đơn giao / review trong 3 tháng) → điều kiện tương ứng coi là false
 3. `int_seller_tier_versions`: so tier tháng này với tháng trước (`lag`), đánh số version (`sum(changed) over`), `valid_from` = ngày cuối tháng tier được chấm + 1 ngày (tier chỉ "biết" khi tháng kết thúc), `valid_to` = valid_from của version kế − 1 ngày, version cuối `valid_to = 9999-12-31`, `is_current = true`. **Version đầu tiên**: `valid_from = 1900-01-01`, tier = New (để mọi sự kiện trước lần chấm đầu đều tra được). Seller không có doanh số: 1 version tier = Unscored.
 4. `dim_seller` = versions + thuộc tính Type 1.
 5. Lookup trong fact: `event_date between valid_from and valid_to`.
-6. Tests bắt buộc: đúng 1 dòng is_current / seller; không chồng lấn khoảng thời gian; point-in-time lookup trả đúng 1 version cho mọi ngày.
+6. Tests bắt buộc: đúng 1 dòng is_current / seller; không chồng lấn khoảng thời gian; point-in-time lookup trả đúng 1 version cho mọi ngày (`tests/assert_dim_seller_*`, `assert_fact_seller_point_in_time`).
+   Kết quả 01/11: 3 557 seller, 8 189 version (tối đa 12 / seller); tier hiện hành: Bronze 2 226, New 536, Unscored 462, Silver 168, At-risk 159, Gold 6.
 7. Load live (sau backfill): dbt snapshot (strategy `check` trên seller_tier) — snapshot chỉ ghi trạng thái quan sát khi chạy, không dựng lại lịch sử, nên backfill dùng SQL như trên. Ghi điều này trong báo cáo.
 
 ---
@@ -453,6 +456,9 @@ Intermediate models (schema `stg`): `int_customer_map`, `int_order_primary_selle
 | meta.source_to_target | target_model, target_column, source_models, transformation_note | từ dbt manifest (depends_on) |
 | meta.model_registry | model_run_id, model_name, model_version, trained_at, train_window, params_json, metrics_json | ml/common/registry.py |
 | meta.decision_log (COULD) | rec_id, decided_by, decision (accept/reject), note, decided_at | nhập tay / script |
+| meta.dq_issue_summary | layer, model_name, issue, issue_rows, total_rows, issue_pct | dbt model `models/quality/` — lỗi được giữ lại và gắn cờ (`_dq_issue`) + bất thường đã biết + số đơn lệch tiền vượt tolerance (dbt ghi failures = 0 khi test warn dưới ngưỡng) |
+
+`meta_publish.py` chạy ngay sau `dbt build` (trước `dbt docs generate`, lệnh này ghi đè `run_results.json`): ghi `meta.dq_results`, 1 dòng `dbt:<lệnh>` vào `meta.etl_run_log`, `meta.data_dictionary` (kiểu dữ liệu đọc từ `information_schema`), `meta.source_to_target` (lineage cấp model).
 
 Lineage graph từ `dbt docs` chụp làm hình trong báo cáo. Các loại metadata khớp môn học: structure, source data, transformation, data model, history of extracts.
 
@@ -559,7 +565,7 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - [x] P5 MUST upload_to_lake.py, load_raw.py (COPY text + metadata cols + etl_run_log)
 - [x] P6 SHOULD Airflow DAG olist_pipeline + Dockerfile (dbt venv) — 15/15 task success (01/11); chạy lại khi có model/ML thật
 - [ ] P7 SHOULD replay_month.py (+ cùng F8)
-- [~] P8 MUST meta_publish.py (dq_results, data_dictionary, source_to_target), DDL meta.*
+- [x] P8 MUST meta_publish.py (dq_results, data_dictionary, source_to_target), DDL meta.* — 01/11: 234 test, 383 cột, 39 model; thêm log dbt vào etl_run_log, dq_issue_summary
 - [ ] P9 MUST dbt docs + lineage figure; `make all` chạy sạch trên máy mới
 
 ### S — Staging, Dimensions, Data Quality (TV2 — Minh Hiếu)
@@ -567,17 +573,17 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - [x] S2 MUST dbt project init, sources.yml, macros (generate_schema_name, int_sk, cleaning, haversine/lag_days), seeds
 - [x] S3 MUST stg_* cho 11 file + br_states + calendar_events + holidays; int_customer_map — 01/11
 - [x] S4 MUST dim_date, dim_geography, dim_product, dim_customer, dim_order_status, dim_payment_type — 01/11
-- [ ] S5 SHOULD dim_lead_origin, dim_lead_profile, dim_sales_rep, fact_lead_funnel
-- [~] S6 SHOULD int_seller_month_metrics, int_seller_tier_monthly, int_seller_tier_versions, dim_seller SCD2 (MUST: bản Type 1 tạm trước để F không bị chặn) — bản tạm xong 01/11 (cấu trúc SCD2, tier Unscored, key = int_sk(seller_id, valid_from)); còn SCD2 thật
-- [~] S7 MUST tests dims + business-rule tests + YAML dictionary cho dims — YAML + test key/FK/accepted_values cho stg và dims, 2 test SCD2 (1 version current, không chồng lấn); còn test point-in-time khi có SCD2
+- [x] S5 SHOULD dim_lead_origin, dim_lead_profile, dim_sales_rep, fact_lead_funnel — 01/11; conversion 10,53%, có has_full_90d_window
+- [x] S6 SHOULD int_seller_month_metrics, int_seller_tier_monthly, int_seller_tier_versions, dim_seller SCD2 — 01/11 (rule New chỉnh theo thâm niên, xem mục 10)
+- [x] S7 MUST tests dims + business-rule tests + YAML dictionary cho dims — 01/11; SCD2: 1 version current, không chồng lấn, liên tục, point-in-time
 
 ### F — Facts, BI marts, Power BI (TV3 — Xuân Vinh)
 - [x] F1 MUST int_order_primary_seller, int_order_agg — 01/11
 - [x] F2 MUST fact_order_item, fact_payment — 01/11
 - [x] F3 MUST fact_order_fulfillment (accumulating, lags, distance), fact_review — 01/11; late rate 6,77% khớp profiling
-- [ ] F4 SHOULD fact_seller_month; COULD fact_seller_product_activity
-- [~] F5 MUST reconciliation tests + YAML facts — YAML facts, equal_rowcount stg↔fact, Σ tiền stg = fact, item vs payment (tolerance A5, warn), tỷ lệ key -1 < 1% (warn); còn Σ fact_seller_month = Σ fact_order_item (chờ F4)
-- [ ] F6 MUST schema bi views + docs/kpi_dictionary.md
+- [x] F4 SHOULD fact_seller_month; COULD fact_seller_product_activity — 01/11, cả hai
+- [x] F5 MUST reconciliation tests + YAML facts — 01/11: equal_rowcount stg↔fact, Σ tiền stg = fact, item vs payment (tolerance A5), key -1 < 1%, Σ fact_seller_month = Σ fact_order_item theo tháng, funnel won = closed_deals
+- [x] F6 MUST schema bi views + docs/kpi_dictionary.md — 02/11: 21 view (11 dim, 7 fact, 3 DQ), user chỉ đọc `powerbi_reader`, giải thích ở docs/bi_layer.md; view ML để khi làm nhóm M
 - [ ] F7 MUST Power BI semantic model + DAX measures + trang 1, 3, 5, 6, 8
 - [ ] F8 SHOULD incremental models (cùng P7)
 
@@ -623,6 +629,9 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 - 2026-10-30: Chốt PostgreSQL thay BigQuery; dbt thay Spark; thêm MinIO làm data lake; Airflow chỉ điều phối.
 - 2026-11-01: Thay MinIO (ngừng phát hành image community) bằng Azure Blob Storage: Azurite khi dev, ADLS Gen2 (Azure for Students) khi demo. boto3 → azure-storage-blob; env `MINIO_*`/`LAKE_BUCKET` → `AZURE_STORAGE_CONNECTION_STRING`/`LAKE_CONTAINER`.
 - 2026-11-01: Bỏ IBGE Localidades API (chặn IP ngoài Brazil). Bang & vùng từ `data/raw/events_brazilstates/br_states.csv`; `ibge_state_id` thêm vào seed `br_state_population`; bỏ `raw.ibge_states`, `raw.ibge_municipalities`, `fetch_ibge.py`, `data/fallback/`. raw còn 14 bảng.
+- 2026-11-02: F6 lớp `bi`: view mỏng, cột khoá snake_case + cột hiển thị Title Case; `v_dim_date` bỏ dòng -1 (để Mark as date table); role-playing date = 1 bảng Date + relationship inactive, geography = 2 view; `primary_seller_key` → `seller_key` trong view fulfillment/review; `v_dim_seller` thêm Current Tier / Previous Tier. User `powerbi_reader` (macro `grant_bi_reader`, on-run-end) chỉ đọc `bi`. Days to close = AVERAGE (bỏ 1 lead won_before_contact). View ML hoãn tới nhóm M. Chi tiết: docs/bi_layer.md.
+- 2026-11-01: Rule tier v1 chỉnh: New chỉ theo thâm niên (< 3 tháng); đủ thâm niên mà orders_3m < 5 → Bronze; New hết 3 tháng không bán → Bronze. Lý do: vế "HOẶC orders_3m < 5" gốc làm seller bán 22 tháng bị nhãn New (08/2018: 288 seller) và seller ngừng bán giữ New mãi. Ngưỡng số trong seed giữ nguyên.
+- 2026-11-01: Thêm model `meta.dq_issue_summary` (thư mục `models/quality/`); `meta_publish` đọc kiểu dữ liệu từ information_schema và ghi 1 dòng `dbt:<lệnh>` vào etl_run_log.
 - 2026-11-01: Cờ trong fact (is_delivered, is_late, is_dispatch_late, is_low_score, has_comment) lưu dạng integer 0/1 để cộng trực tiếp; thêm `fact_order_fulfillment.has_carrier_date` làm mẫu số dispatch late rate. `order_value` = Σ price (không gồm ship), cùng cơ sở với GMV. Postgres container `shm_size: 512mb` (mặc định 64 MB làm lỗi join song song khi build fact).
 - 2026-11-01: Sau profiling S1: chốt tolerance đối soát item vs payment = max(1 BRL, 1%); lag âm → null + `_dq_issue`; weight 0 → null; origin null → `unknown`; thêm `fact_lead_funnel.has_full_90d_window` (won_date kéo dài sau ANALYSIS_END).
 - 2026-10-30: Segment khách chuyển từ dw.dim_customer sang bi.v_dim_customer (tránh vòng dw ↔ ml).

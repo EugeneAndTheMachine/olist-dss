@@ -6,6 +6,9 @@
     ('fact_payment', ['customer_key', 'payment_type_key', 'order_status_key']),
     ('fact_order_fulfillment', ['customer_key', 'primary_seller_key', 'customer_geo_key', 'order_status_key']),
     ('fact_review', ['customer_key', 'customer_geo_key', 'order_status_key']),
+    ('fact_seller_month', ['seller_key', 'seller_geo_key']),
+    ('fact_seller_product_activity', ['seller_key', 'product_key']),
+    ('fact_lead_funnel', ['lead_origin_key']),
 ] %}
 
 {% for model, keys in checks %}
