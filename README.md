@@ -5,6 +5,8 @@ Assignment môn Data Warehouse — nhóm 4 người. Kimball DW + Medallion (Azu
 - Thiết kế kỹ thuật (nguồn sự thật): [`CLAUDE.md`](CLAUDE.md)
 - Mô tả dự án & phân công: [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md)
 - **Hướng dẫn setup chi tiết: [`docs/SETUP.md`](docs/SETUP.md)**
+- Phạm vi mới (3 bài toán, 1 dataset): [`docs/refactor_plan.md`](docs/refactor_plan.md)
+- **Làm lại phần nghiệp vụ (dbt, KPI, ML): [`docs/rebuild_guide.md`](docs/rebuild_guide.md)**
 - Data lake trên Azure (Azure for Students): [`docs/AZURE_SETUP.md`](docs/AZURE_SETUP.md)
 - Power BI: [`powerbi/README.md`](powerbi/README.md)
 

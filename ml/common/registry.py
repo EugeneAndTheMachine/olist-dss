@@ -1,9 +1,9 @@
 """Sinh model_run_id và đăng ký vào meta.model_registry (CLAUDE.md mục 11.2, 13).
 
 Cách dùng:
-    run = new_run("late_risk", "0.1.0")
+    run = new_run("<module>", "0.1.0")
     out = tag_output(scores_df, run)
-    append_df(out, "order_late_risk")
+    append_df(out, "<bang_ml>")
     register(run, train_window="2017-01-01..2018-05-31", params={...}, metrics={"roc_auc": 0.71})
 """
 from __future__ import annotations

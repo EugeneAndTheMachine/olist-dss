@@ -4,6 +4,10 @@
 > - Đây là nguồn sự thật (single source of truth) cho thiết kế. Nếu code và file này mâu thuẫn → hỏi lại người dùng, đừng tự đoán.
 > - Khi một quyết định thiết kế thay đổi, cập nhật file này (mục 19 Changelog) trong cùng commit.
 > - Kế hoạch phân công cho con người nằm ở `docs/PROJECT_PLAN.md`. Task ID (P*, S*, F*, M*) dùng chung giữa hai file.
+>
+> **Cập nhật 2026-11-06 — đang làm lại phần nghiệp vụ.** Dataset Marketing Funnel đã bỏ; phạm vi đổi sang 3 bài toán (`docs/refactor_plan.md`).
+> Toàn bộ dbt model, test, seed/macro nghiệp vụ và ML stub đã bị xoá để nhóm định nghĩa lại từng nghiệp vụ: làm theo `docs/rebuild_guide.md`.
+> Mục 7–10, 13–14 bên dưới mô tả **thiết kế cũ**, chỉ để tham khảo cho tới khi được viết lại. Mục 2–6, 11.2, 12, 15–16 (hạ tầng) vẫn đúng, trừ các dòng nhắc tới funnel.
 
 ---
 
@@ -557,6 +561,8 @@ Trạng thái: `[ ]` chưa làm · `[~]` đang làm · `[x]` xong. Ưu tiên: MU
 
 Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end; người phụ trách chạy, sửa lỗi rồi đánh `[x]`.
 
+Ghi chú 06/11: code của S2 (seed/macro nghiệp vụ), S3–S7, F1–F6, M2 (DDL ml), M3–M7 đã bị xoá để làm lại theo `docs/rebuild_guide.md`; trạng thái `[x]` bên dưới là của thiết kế cũ.
+
 ### P — Data Platform, Ingestion, Orchestration (TV1 — Ngọc Cẩn)
 - [x] P1 MUST Repo skeleton, .gitignore, .env.example, Makefile, README quickstart
 - [x] P2 MUST docker-compose (postgres + init SQL schemas/meta/ml, azurite); Airflow service (SHOULD)
@@ -625,6 +631,8 @@ Ghi chú 30/10: khung code (`[~]`) đã có nhưng chưa chạy thử end-to-end
 
 ## 19. Changelog thiết kế (so với bản mô tả gốc)
 
+- 2026-11-06: Reset phần nghiệp vụ: xoá mọi dbt model (staging, intermediate, dims, facts, bi, quality), singular tests, seed `order_status_map`, `category_group`, `instalment_band`, `seller_tier_rules`, macro `cleaning`, `haversine`, `unknown_member`, `tier_sort`, biến `date_spine_*`/`scd_*`/`seller_tier_rule_version`, ML stub (M3–M7) và `03_ml.sql`, docs `kpi_dictionary`, `bi_layer`, `implementation_walkthrough`, `powerbi_guide`. Bỏ dataset Marketing Funnel khỏi ingestion (raw còn 12 bảng). Giữ hạ tầng: ingestion, load raw, meta, Airflow, khung dbt, macro `int_sk`/`generate_schema_name`/`grant_bi_reader`, seed `br_state_population`, `ml/common`. Cách làm lại: `docs/rebuild_guide.md`; code cũ ở commit `83891b5`.
+- 2026-11-06: Phạm vi đổi sang 3 bài toán (giao trễ theo khu vực, quy mô thị trường theo zip, hạng mục sản phẩm), 1 dataset: `docs/refactor_plan.md`.
 - 2026-10-30: Nén timeline từ "Week 1/2/3 + Stretch" thành 14 ngày, phân MUST/SHOULD/COULD.
 - 2026-10-30: Chốt PostgreSQL thay BigQuery; dbt thay Spark; thêm MinIO làm data lake; Airflow chỉ điều phối.
 - 2026-11-01: Thay MinIO (ngừng phát hành image community) bằng Azure Blob Storage: Azurite khi dev, ADLS Gen2 (Azure for Students) khi demo. boto3 → azure-storage-blob; env `MINIO_*`/`LAKE_BUCKET` → `AZURE_STORAGE_CONNECTION_STRING`/`LAKE_CONTAINER`.

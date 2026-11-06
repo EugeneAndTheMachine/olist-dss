@@ -64,12 +64,9 @@ seed: dbt-profile
 build: dbt-profile
 	$(DBT) build
 
+# Module ML làm lại theo docs/rebuild_guide.md (bước 5); thêm lệnh vào đây khi có
 ml:
-	$(PYTHON) -m ml.late_risk.train
-	$(PYTHON) -m ml.crm_segment_voucher.train
-	$(PYTHON) -m ml.gmv_forecast.train
-	$(PYTHON) -m ml.seller_risk.train
-	$(PYTHON) -m ml.recommendations
+	@echo "Chưa có module ML (xem docs/rebuild_guide.md)"
 
 meta:
 	$(PYTHON) -m ingestion.meta_publish
@@ -93,6 +90,6 @@ reset-db:
 	@read -p "Xoá toàn bộ schema raw/stg/dw/bi/ml/meta trong $(POSTGRES_DB)? Gõ 'yes': " ans && [ "$$ans" = "yes" ]
 	$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
 		-c "drop schema if exists raw, stg, dw, bi, ml, meta cascade;"
-	for f in docker/postgres/init/01_schemas.sql docker/postgres/init/02_meta.sql docker/postgres/init/03_ml.sql; do \
+	for f in docker/postgres/init/01_schemas.sql docker/postgres/init/02_meta.sql ; do \
 		$(COMPOSE) exec -T postgres psql -v ON_ERROR_STOP=1 -U $(POSTGRES_USER) -d $(POSTGRES_DB) < $$f; \
 	done

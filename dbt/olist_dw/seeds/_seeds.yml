@@ -1,39 +1,6 @@
 version: 2
 
 seeds:
-  - name: order_status_map
-    description: "Nhóm trạng thái đơn và cờ tính là bán (CLAUDE.md mục 7.4). Xác nhận danh sách ở S1 (A1)."
-    config:
-      column_types: {order_status: text, status_group: text, counts_as_sale: boolean}
-    columns:
-      - name: order_status
-        description: "Giá trị order_status gốc của Olist"
-        data_tests: [unique, not_null]
-      - name: status_group
-        description: "Completed / Open / Cancelled"
-        data_tests:
-          - accepted_values:
-              values: ["Completed", "Open", "Cancelled"]
-      - name: counts_as_sale
-        description: "true nếu đơn được tính vào GMV/Orders"
-
-  - name: instalment_band
-    description: "Dải số kỳ trả góp cho dim_payment_type (junk dimension)."
-    config:
-      column_types: {instalment_band: text, min_instalments: integer, max_instalments: integer, is_instalment: boolean, sort_order: integer}
-    columns:
-      - name: instalment_band
-        description: "Nhãn dải: 1, 2-3, 4-6, 7-10, 11+"
-        data_tests: [unique, not_null]
-      - name: min_instalments
-        description: "Số kỳ nhỏ nhất (bao gồm)"
-      - name: max_instalments
-        description: "Số kỳ lớn nhất (bao gồm)"
-      - name: is_instalment
-        description: "true nếu trả góp (> 1 kỳ)"
-      - name: sort_order
-        description: "Thứ tự hiển thị"
-
   - name: br_state_population
     description: "Mã IBGE và dân số ước tính theo bang ~2018 (IBGE). TV2 kiểm tra lại số liệu nguồn ở S2."
     config:
@@ -47,47 +14,3 @@ seeds:
         data_tests: [unique, not_null]
       - name: population_2018
         description: "Dân số ước tính 2018"
-
-  - name: category_group
-    description: "Gộp ~73 category Olist về ~11 nhóm cho phân tích Commerce (Seller QM/Commerce có thể chỉnh)."
-    config:
-      column_types: {product_category_name: text, category_group: text}
-    columns:
-      - name: product_category_name
-        description: "Tên category tiếng Bồ Đào Nha (khoá gốc); 'unknown' cho sản phẩm thiếu category"
-        data_tests: [unique, not_null]
-      - name: category_group
-        description: "Nhóm ngành"
-        data_tests: [not_null]
-
-  - name: seller_tier_rules
-    description: >
-      Ngưỡng chấm tier seller (CLAUDE.md mục 10). Cấu trúc logic (HOẶC/VÀ) nằm trong int_seller_tier_monthly,
-      seed chỉ chứa ngưỡng để Seller Quality Manager chỉnh và tăng rule_version.
-    config:
-      column_types:
-        rule_version: text
-        tier: text
-        priority: integer
-        min_orders_3m: integer
-        max_late_rate_3m: numeric
-        min_avg_score_3m: numeric
-        min_months_since_first: integer
-        note: text
-    columns:
-      - name: rule_version
-        description: "Phiên bản bộ rule"
-      - name: tier
-        description: "New, At-risk, Gold, Silver, Bronze"
-      - name: priority
-        description: "Thứ tự xét (nhỏ xét trước)"
-      - name: min_orders_3m
-        description: "Ngưỡng số đơn 3 tháng"
-      - name: max_late_rate_3m
-        description: "Ngưỡng tỷ lệ trễ 3 tháng"
-      - name: min_avg_score_3m
-        description: "Ngưỡng điểm review trung bình 3 tháng"
-      - name: min_months_since_first
-        description: "Số tháng tối thiểu kể từ đơn đầu (chỉ dùng cho New)"
-      - name: note
-        description: "Diễn giải rule"

@@ -51,7 +51,6 @@ Lệnh này tạo `.venv/` với Python 3.11 và cài đúng các phiên bản �
 ```
 data/raw/
 ├── ecom_dataset/            # 9 CSV của olistbr/brazilian-ecommerce
-├── marketing_funnel/        # 2 CSV của olistbr/marketing-funnel-olist
 └── events_brazilstates/     # br_states.csv, calendar_events.csv (file nhóm chuẩn bị)
 ```
 
@@ -60,9 +59,8 @@ File lớn nhất (`olist_geolocation_dataset.csv`, ~61 MB) vượt mức cảnh
 
 **Cách B — Kaggle API** (khi `data/raw/` thiếu file):
 1. kaggle.com → *Settings → API → Create New Token* → lấy `username` và `key` trong `kaggle.json` điền vào `.env`.
-2. Mở 2 trang dataset và bấm **accept rules / download** một lần trên web, nếu không API trả lỗi 403:
+2. Mở trang dataset và bấm **accept rules / download** một lần trên web, nếu không API trả lỗi 403:
    - https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
-   - https://www.kaggle.com/datasets/olistbr/marketing-funnel-olist
 
 Bang & vùng Brazil lấy từ `data/raw/events_brazilstates/br_states.csv`; mã IBGE và dân số theo bang nằm trong seed dbt `br_state_population`. Không gọi API IBGE (API này chặn IP ngoài Brazil).
 
@@ -112,7 +110,7 @@ Hoặc một lệnh: `make all`.
 Kiểm tra trong DBeaver/psql:
 
 ```sql
-select table_name from information_schema.tables where table_schema = 'raw' order by 1;   -- 14 bảng
+select table_name from information_schema.tables where table_schema = 'raw' order by 1;   -- 12 bảng
 select count(*) from raw.orders;                                                          -- ~99 441
 select step, status, rows_out, message from meta.etl_run_log order by log_id desc limit 20;
 ```

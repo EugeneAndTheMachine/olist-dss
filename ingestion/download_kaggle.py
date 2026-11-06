@@ -14,14 +14,13 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from ingestion.config import ECOM, FUNNEL, MANUAL_RAW_DIR, setup_logging, sources_for, today_extract_date
+from ingestion.config import ECOM, MANUAL_RAW_DIR, setup_logging, sources_for, today_extract_date
 
 logger = logging.getLogger(__name__)
 
 # dataset trong lake -> (Kaggle ref, thư mục con trong LOCAL_RAW_DIR)
 KAGGLE_DATASETS: dict[str, tuple[str, str]] = {
     ECOM: ("olistbr/brazilian-ecommerce", "ecom_dataset"),
-    FUNNEL: ("olistbr/marketing-funnel-olist", "marketing_funnel"),
 }
 
 

@@ -2,7 +2,7 @@
 
 [download_kaggle, copy_manual, gen_holidays] → upload_to_lake → load_raw
   → dbt_deps → dbt_seed → dbt_build
-  → [ml_late_risk, ml_crm, ml_forecast, ml_seller_risk] → ml_recommendations
+  → (ML: thêm lại theo docs/rebuild_guide.md)
   → meta_publish → dbt_docs_generate
 
 Repo được mount vào /opt/olist (docker-compose.yml). Kết nối lấy từ env, không hardcode.
@@ -97,16 +97,10 @@ with DAG(
     dbt_seed = task("dbt_seed", f"{DBT_PROFILE}; {DBT} seed")
     dbt_build = task("dbt_build", f"{DBT_PROFILE}; {DBT} build")
 
-    ml_models = [
-        task("ml_late_risk", "python -m ml.late_risk.train"),
-        task("ml_crm", "python -m ml.crm_segment_voucher.train"),
-        task("ml_forecast", "python -m ml.gmv_forecast.train"),
-        task("ml_seller_risk", "python -m ml.seller_risk.train"),
-    ]
-    ml_recommendations = task("ml_recommendations", "python -m ml.recommendations")
+    # Task ML thêm lại khi có module (docs/rebuild_guide.md, bước 5)
 
     meta_publish = task("meta_publish", "python -m ingestion.meta_publish")
     dbt_docs_generate = task("dbt_docs_generate", f"{DBT_PROFILE}; {DBT} docs generate")
 
     extract >> upload_to_lake >> load_raw >> dbt_deps >> dbt_seed >> dbt_build
-    dbt_build >> ml_models >> ml_recommendations >> meta_publish >> dbt_docs_generate
+    dbt_build >> meta_publish >> dbt_docs_generate
