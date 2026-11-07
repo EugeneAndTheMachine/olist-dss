@@ -1,4 +1,4 @@
-"""P5 — Upload toàn bộ data/landing/ lên data lake (Azure Blob / Azurite), giữ nguyên đường dẫn.
+"""Upload toàn bộ data/landing/ lên data lake (Azure Blob / Azurite), giữ nguyên đường dẫn.
 
 File đã có trên lake thì bỏ qua: landing là bất biến, không bao giờ ghi đè.
 """

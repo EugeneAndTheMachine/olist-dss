@@ -21,7 +21,7 @@ help:
 	@echo "make up | up-airflow | down"
 	@echo "make ingest | load-raw | dbt-deps | seed | build | ml | meta | docs | docs-serve"
 	@echo "make all                  # up -> ingest -> load-raw -> dbt -> ml -> meta -> docs"
-	@echo "make replay MONTH=2017-11 # nạp lại 1 tháng (P7/F8)"
+	@echo "make replay MONTH=2017-11 # nạp lại 1 tháng"
 	@echo "make reset-db             # XOÁ toàn bộ schema (hỏi xác nhận)"
 
 venv:
@@ -43,8 +43,6 @@ down:
 
 ingest:
 	$(PYTHON) -m ingestion.download_kaggle
-	$(PYTHON) -m ingestion.copy_manual
-	$(PYTHON) -m ingestion.gen_holidays
 	$(PYTHON) -m ingestion.upload_to_lake
 
 load-raw:

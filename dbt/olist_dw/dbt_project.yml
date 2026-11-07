@@ -28,7 +28,7 @@ models:
     +persist_docs:
       relation: true
       columns: true
-    # Bảng vừa tạo chưa có statistics → planner chọn join tệ (fact_order_fulfillment > 10 phút thay vì < 1 giây)
+    # Bảng vừa tạo chưa có statistics → planner chọn join tệ (join lớn có thể chậm từ < 1 giây thành > 10 phút)
     +post-hook:
       - "{% if config.get('materialized') in ('table', 'incremental') %}analyze {{ this }}{% endif %}"
     staging:

@@ -12,4 +12,4 @@ Code cũ để tham khảo: `git show 83891b5:dbt/olist_dw/models/<path>`.
 | `bi/` | `bi` | `v_*` views cho Power BI | 4–5 |
 
 Macro còn giữ (`macros/`): `int_sk` (surrogate key băm), `generate_schema_name`, `grant_bi_reader` (on-run-end: user chỉ đọc schema bi).
-Seed còn giữ: `br_state_population`.
+Seed: chưa có (thêm khi chốt nghiệp vụ, vd. `order_status_map`).

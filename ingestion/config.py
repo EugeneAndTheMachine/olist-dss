@@ -120,11 +120,6 @@ RAW_SOURCES: list[RawSource] = [
     RawSource("kaggle", ECOM, "olist_products_dataset.csv", "products"),
     RawSource("kaggle", ECOM, "olist_geolocation_dataset.csv", "geolocation"),
     RawSource("kaggle", ECOM, "product_category_name_translation.csv", "product_category_name_translation"),
-    # Python holidays
-    RawSource("holidays", "br_holidays", "br_holidays.csv", "br_holidays"),
-    # File nhóm tự chuẩn bị (data/raw/events_brazilstates)
-    RawSource("manual", "events_brazilstates", "br_states.csv", "br_states"),
-    RawSource("manual", "events_brazilstates", "calendar_events.csv", "calendar_events"),
 ]
 
 

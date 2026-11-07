@@ -28,7 +28,7 @@
 ## 0. Kiến trúc & các khái niệm
 
 ```
-data/raw, Kaggle, holidays
+data/raw hoặc Kaggle
         │  make ingest (upload_to_lake.py)
         ▼
 Azure Storage account  olistlake<xxx>          ← phần 4
@@ -232,7 +232,7 @@ Làm trên **mỗi máy** muốn dùng Azure thật.
 
 ## 7. Kiểm tra kết quả
 
-**Trên Portal**: Storage account → **Data storage → Containers** → `olist-lake` → `landing` → `kaggle`, `holidays`, `manual` → `.../extract_date=YYYY-MM-DD/` → các file CSV/JSON.
+**Trên Portal**: Storage account → **Data storage → Containers** → `olist-lake` → `landing` → `kaggle` → `brazilian-ecommerce` → `.../extract_date=YYYY-MM-DD/` → các file CSV.
 
 **Bằng Python** (đếm file trên lake):
 

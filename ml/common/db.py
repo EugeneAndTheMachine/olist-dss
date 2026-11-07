@@ -1,4 +1,4 @@
-"""Đọc/ghi PostgreSQL cho các module ML. Đọc từ dw/bi, chỉ ghi vào schema ml (CLAUDE.md mục 13)."""
+"""Đọc/ghi PostgreSQL cho các module ML. Đọc từ dw/bi, chỉ ghi vào schema ml (implementation.md mục 12)."""
 from __future__ import annotations
 
 import logging

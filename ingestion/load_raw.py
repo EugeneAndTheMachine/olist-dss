@@ -1,4 +1,4 @@
-"""P5 — Nạp file từ data lake (Azure Blob / Azurite) vào schema raw (Bronze, queryable).
+"""Nạp file từ data lake (Azure Blob / Azurite) vào schema raw (Bronze, queryable).
 
 - Mỗi file nguồn ↔ 1 bảng raw.<table> (danh mục ở config.RAW_SOURCES).
 - Mọi cột kiểu text + _batch_id, _loaded_at, _source_file. Không làm sạch.

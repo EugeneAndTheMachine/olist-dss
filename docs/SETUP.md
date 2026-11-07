@@ -1,6 +1,6 @@
 # Hướng dẫn setup môi trường
 
-> Ai cũng làm mục 1–6 trong ngày 1. Mục 7 (Airflow) chỉ cần 1 máy (Ngọc Cẩn). Mục 8 (Power BI) cho người làm dashboard (Xuân Vinh, Trường An).
+> Ai cũng làm mục 1–6. Mục 7 (Airflow) chỉ cần 1 máy. Mục 8 (Power BI) cho người làm dashboard (máy Windows).
 > Lệnh viết cho **Git Bash** trên Windows (macOS/Linux/WSL2 chạy y hệt, chỉ khác đường dẫn venv).
 
 ## 1. Cài phần mềm
@@ -12,7 +12,7 @@
 | **uv** (quản lý Python + venv) | PowerShell: `winget install astral-sh.uv` (hoặc xem https://docs.astral.sh/uv/getting-started/installation/). macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh \| sh` | `uv --version` |
 | GNU make | PowerShell: `winget install ezwinports.make` (mở lại Git Bash sau khi cài). Hoặc dùng WSL2 | `make --version` |
 | DBeaver (tuỳ chọn) | https://dbeaver.io | — |
-| Power BI Desktop (TV3, TV4) | Microsoft Store | — |
+| Power BI Desktop (người làm dashboard, chỉ Windows) | Microsoft Store | — |
 
 **Lưu ý Windows:**
 - **Không cần tự cài Python.** uv tự tìm Python 3.11 trên máy, không có thì tự tải về (file `.python-version` ghi `3.11`). Nhờ vậy tránh được Python của MSYS2/MinGW/Anaconda, vốn không cài được wheel của pandas, lightgbm, dbt.
@@ -35,7 +35,7 @@ Mở `.env`, chỉ cần sửa khi:
 uv sync            # hoặc: make venv
 ```
 
-Lệnh này tạo `.venv/` với Python 3.11 và cài đúng các phiên bản đã khoá trong `uv.lock` (cả 4 máy giống nhau). Lần đầu mất vài phút.
+Lệnh này tạo `.venv/` với Python 3.11 và cài đúng các phiên bản đã khoá trong `uv.lock` (mọi máy giống nhau). Lần đầu mất vài phút.
 
 - **Không cần activate.** Makefile gọi mọi thứ qua `uv run` (`uv run python -m ...`, `uv run dbt ...`). Chạy tay cũng vậy: `uv run python -m ingestion.load_raw`, `uv run jupyter lab`.
 - Muốn activate (VS Code, notebook): `source .venv/Scripts/activate` (Git Bash) hoặc `.venv\Scripts\activate` (PowerShell). VS Code: *Python: Select Interpreter* → `.venv`.
@@ -50,8 +50,7 @@ Lệnh này tạo `.venv/` với Python 3.11 và cài đúng các phiên bản �
 
 ```
 data/raw/
-├── ecom_dataset/            # 9 CSV của olistbr/brazilian-ecommerce
-└── events_brazilstates/     # br_states.csv, calendar_events.csv (file nhóm chuẩn bị)
+└── ecom_dataset/            # 9 CSV của olistbr/brazilian-ecommerce (nguồn duy nhất)
 ```
 
 Chỉ `data/raw/` được commit; `data/landing/` là cache sinh lại bằng `make ingest` nên bị bỏ qua.
@@ -62,7 +61,7 @@ File lớn nhất (`olist_geolocation_dataset.csv`, ~61 MB) vượt mức cảnh
 2. Mở trang dataset và bấm **accept rules / download** một lần trên web, nếu không API trả lỗi 403:
    - https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce
 
-Bang & vùng Brazil lấy từ `data/raw/events_brazilstates/br_states.csv`; mã IBGE và dân số theo bang nằm trong seed dbt `br_state_population`. Không gọi API IBGE (API này chặn IP ngoài Brazil).
+Project chỉ dùng dataset này. Dữ liệu tham chiếu khác (bang → vùng, ngày lễ, dân số) nếu cần sẽ được thêm dưới dạng seed dbt sau khi chốt nghiệp vụ (`docs/rebuild_guide.md`).
 
 ## 5. Dựng hạ tầng (PostgreSQL + data lake Azure Blob)
 
@@ -97,11 +96,11 @@ Tóm tắt: 1 người tạo Storage account → mỗi máy dán connection stri
 ## 6. Chạy pipeline
 
 ```bash
-make ingest      # data/raw hoặc Kaggle + holidays → data/landing → Azure Blob (Azurite)
+make ingest      # data/raw hoặc Kaggle → data/landing → Azure Blob (Azurite)
 make load-raw    # Azure Blob → schema raw (+ meta.etl_run_log)
 make dbt-deps    # tạo dbt/olist_dw/profiles.yml từ profiles.example.yml, cài dbt_utils
-make seed
-make build       # dbt build: stg → dw → bi (+ tests)
+make seed        # chưa có seed (thêm khi chốt nghiệp vụ)
+make build       # dbt build: stg → dw → bi (+ tests); hiện chưa có model
 make docs-serve  # http://localhost:8081 — lineage graph
 ```
 
@@ -110,7 +109,7 @@ Hoặc một lệnh: `make all`.
 Kiểm tra trong DBeaver/psql:
 
 ```sql
-select table_name from information_schema.tables where table_schema = 'raw' order by 1;   -- 12 bảng
+select table_name from information_schema.tables where table_schema = 'raw' order by 1;   -- 9 bảng
 select count(*) from raw.orders;                                                          -- ~99 441
 select step, status, rows_out, message from meta.etl_run_log order by log_id desc limit 20;
 ```
@@ -120,7 +119,7 @@ select step, status, rows_out, message from meta.etl_run_log order by log_id des
 Chạy dbt thủ công (không qua make) thì phải có biến môi trường của `.env` (gồm `PYTHONUTF8=1`, bắt buộc trên Windows):
 `set -a; source .env; set +a; uv run dbt build --project-dir dbt/olist_dw --profiles-dir dbt/olist_dw`.
 
-## 7. Airflow (1 máy — Ngọc Cẩn)
+## 7. Airflow (chỉ cần 1 máy)
 
 ```bash
 make up-airflow                         # build image lần đầu ~5–10 phút, image ~3 GB (cần ≥ 25 GB trống ở ổ chứa dữ liệu Docker)
@@ -135,14 +134,14 @@ docker compose logs -f airflow          # chờ "Airflow is ready"
 - Log từng task: UI → DAG → Grid → chọn task → *Logs*; callback cũng ghi mỗi task 1 dòng `airflow:<task_id>` vào `meta.etl_run_log`.
 - Máy yếu: không cần Airflow, dùng `make all`.
 
-## 8. Power BI (Xuân Vinh, Trường An)
+## 8. Power BI (người làm dashboard)
 
 Xem [`powerbi/README.md`](../powerbi/README.md).
 
 ## 9. Dùng Claude Code
 
-Mở terminal ở thư mục gốc repo → `claude`. Claude tự đọc `CLAUDE.md`. Giao việc theo task ID, ví dụ:
-*"Làm task S3 theo CLAUDE.md, viết kèm YAML và test"*.
+Mở terminal ở thư mục gốc repo → `claude`. Yêu cầu Claude đọc `implementation.md` và `docs/rebuild_guide.md` trước. Giao việc theo task ID trong `docs/PROJECT_PLAN.md`, kèm rule đã chốt trong `docs/business_rules.md`, ví dụ:
+*"Làm task theo docs/PROJECT_PLAN.md, áp dụng BR-S1…BR-S5, viết kèm YAML và test"*.
 
 ## 10. Xử lý sự cố
 
@@ -161,7 +160,7 @@ Mở terminal ở thư mục gốc repo → `claude`. Claude tự đọc `CLAUDE
 | dbt `UnicodeDecodeError: 'charmap' codec` (Windows) | Thiếu `PYTHONUTF8=1` — có trong `.env.example`; chạy qua `make` hoặc `export PYTHONUTF8=1` |
 | `uv sync` lỗi build `llvmlite` / `numba` | Đã chặn bằng `constraint-dependencies` trong `pyproject.toml`; kiểm tra đang dùng Python 3.11 (`uv run python --version`) |
 | `uv: command not found` sau khi cài | Mở lại terminal (uv thêm thư mục cài vào PATH) |
-| Bảng `ml.*`/`meta.*` không tồn tại | Volume pgdata được tạo trước khi có script init → `make reset-db` |
+| Bảng `meta.*` không tồn tại | Volume pgdata được tạo trước khi có script init → `make reset-db` |
 | Không đăng nhập được Airflow bằng `admin` / `admin` | `airflow standalone` đã tự tạo admin với mật khẩu ngẫu nhiên → `docker compose exec airflow airflow users reset-password --username admin --password admin` |
 | Task ML lỗi `libgomp.so.1: cannot open shared object file` | Image cũ chưa có `libgomp1` (LightGBM cần) → `make up-airflow` (build lại, Dockerfile đã cài) |
 | `dbt_seed`/`dbt_build` trong Airflow lỗi `No dbt_project.yml found at expected path .../dbt_packages/dbt_utils` | Package bị giải nén thiếu trên thư mục mount → DAG đã dùng `DBT_PACKAGES_INSTALL_PATH`; trên máy host chạy lại `rm -rf dbt/olist_dw/dbt_packages && make dbt-deps` |

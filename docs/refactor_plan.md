@@ -1,9 +1,9 @@
 # Refactor Plan: Single Dataset, Three Decision Problems
 
-> Status: **proposed** (2026-11-06). When accepted, the changes below are applied to `implementation.md`
-> (sections 1, 2, 7, 8, 9, 13, 14, 15, 17, 18, 19), `PROJECT_PLAN.md`, `docs/kpi_dictionary.md`, `docs/bi_layer.md`
-> and `docs/powerbi_guide.md` in the same PR series. Task IDs (P*, S*, F*, M*) keep their meaning; new tasks use the
-> `R1-*`, `R2-*`, `R3-*` prefixes described in section 9.
+> Status: **accepted** (2026-11-06). The removal part is done (PR #5, #6): only the 9 Olist e-commerce tables are
+> loaded and all old business logic was deleted. This document is the **target design**; how to rebuild it step by
+> step is in `docs/rebuild_guide.md`, who builds what is in `docs/PROJECT_PLAN.md`. Every design choice below is a
+> proposal until the matching rule is agreed in `docs/business_rules.md`.
 
 ---
 
@@ -11,8 +11,8 @@
 
 | | Before | After |
 | --- | --- | --- |
-| Source data | 2 Kaggle datasets: *Brazilian E-Commerce Public Dataset by Olist* (9 tables) + *Marketing Funnel by Olist* (2 tables) | **1 Kaggle dataset**: *Brazilian E-Commerce Public Dataset by Olist* (9 tables). Supporting files (`br_states.csv`, `calendar_events.csv`, holidays, state population seed) are kept |
-| Business scope | 4 decision makers (Commerce, Logistics & CX, Seller Quality, CRM), 8 Power BI pages, 5 ML modules (M3–M7) | **3 decision problems**, each split into a *dashboard* part (what is happening) and an *ML / decision* part (what to do) |
+| Source data | 2 Kaggle datasets: *Brazilian E-Commerce Public Dataset by Olist* (9 tables) + *Marketing Funnel by Olist* (2 tables) | **1 Kaggle dataset**: *Brazilian E-Commerce Public Dataset by Olist* (9 tables) and nothing else: the supporting files (`br_states.csv`, `calendar_events.csv`, holidays, state population seed) were removed on 2026-11-07 |
+| Business scope | 4 decision makers (Commerce, Logistics & CX, Seller Quality, CRM), 8 Power BI pages, 5 ML modules | **3 decision problems**, each split into a *dashboard* part (what is happening) and an *ML / decision* part (what to do) |
 | Problem 1 | — | **Late delivery by area** → where to place warehouses, where to add couriers |
 | Problem 2 | — | **Regional market size from customer & seller zip codes** → which areas to develop |
 | Problem 3 | — | **Best-selling categories and product demand** → which categories to develop |
@@ -23,7 +23,7 @@ tables and recommendations (Simon phases *Design* and *Choice*).
 
 Why:
 
-- The funnel dataset only joins to 380 of 842 won deals (45.1%, profiling A6), its lead profile exists only for
+- The funnel dataset only joins to 380 of 842 won deals (45.1%, old profiling), its lead profile exists only for
   won leads, and its 90-day window is truncated for 175 deals. It added 3 dimensions, 1 fact and a lot of special
   cases (`is_from_funnel`, `Unscored` tier, `has_full_90d_window`) for one descriptive page.
 - Four decision makers with eight pages is too wide for the remaining time (deadline 2026-11-13). Three focused
@@ -59,12 +59,13 @@ allocation). See section 3.3 for what happens to their artefacts.
 | --- | --- | --- |
 | Kaggle `olistbr/brazilian-ecommerce` | orders, order_items, order_payments, order_reviews, customers, sellers, products, geolocation, product_category_name_translation | **kept** (unchanged) |
 | Kaggle `olistbr/marketing-funnel-olist` | mql, closed_deals | **removed** |
-| `data/raw/events_brazilstates/br_states.csv` | br_states | kept |
-| `data/raw/events_brazilstates/calendar_events.csv` | calendar_events | kept |
-| Python `holidays` | br_holidays | kept |
-| Seed `br_state_population` | — | kept, now central for P2 (orders per 1,000 inhabitants) |
+| `data/raw/events_brazilstates/br_states.csv`, `calendar_events.csv` | br_states, calendar_events | **removed** (2026-11-07) |
+| Python `holidays` | br_holidays | **removed** (2026-11-07) |
+| Seed `br_state_population` | — | **removed** (2026-11-07) |
 
-`raw` goes from 14 to **12** tables.
+`raw` has **9** tables. Reference data that is not in the dataset (state → region mapping, holidays, population)
+is a business decision: if a KPI needs it, agree on it in `docs/business_rules.md` and add it as a dbt seed.
+KPIs below that depend on such data are marked *(needs seed)*.
 
 ### 3.2 What the zip code prefix gives us
 
@@ -73,7 +74,7 @@ the sector, the 4th and 5th the sub-sector. The dataset only exposes the first 5
 geographic hierarchy without any external API:
 
 ```
-zip_prefix (5 digits, ~19k)  →  zip_prefix_3 (sector)  →  zip_prefix_2 (sub-region)  →  city  →  state  →  region (5)
+zip_prefix (5 digits, ~19k)  →  zip_prefix_3 (sector)  →  zip_prefix_2 (sub-region)  →  city  →  state  →  region (5, needs seed)
 ```
 
 Together with the mean latitude / longitude per zip prefix (already in `dim_geography`), this supports maps,
@@ -81,37 +82,22 @@ density analysis, distance calculation and clustering for P1 and P2. Both custom
 prefix, so every area has a **demand side** (customers, orders placed) and a **supply side** (sellers, orders
 shipped).
 
-### 3.3 Artefacts removed or changed because of the funnel removal
+### 3.3 Artefacts removed
 
-| Layer | Artefact | Action |
-| --- | --- | --- |
-| Ingestion | `ingestion/config.py` (`FUNNEL`, 2 `RawSource` entries), `ingestion/download_kaggle.py` (funnel dataset) | remove funnel entries |
-| Data | `data/raw/marketing_funnel/` | delete folder |
-| Env / docs | `.env.example` comment, `docs/SETUP.md` (Kaggle rules for 2 datasets, 14 raw tables) | update to 1 dataset, 12 tables |
-| dbt staging | `stg_mql.sql`, `stg_closed_deals.sql`, entries in `_sources.yml`, `_stg_models.yml` | delete |
-| dbt dims | `dim_lead_origin`, `dim_lead_profile`, `dim_sales_rep` (+ YAML) | delete |
-| dbt dims | `dim_seller.sql`: `funnel_sellers` CTE, union with closed deals, `is_from_funnel` | remove; seller set = `sellers` only (3,095 instead of 3,557). Tier `Unscored` stays in the accepted values but should now be (almost) empty |
-| dbt facts | `fact_lead_funnel` (+ YAML) | delete |
-| dbt bi | `v_dim_lead_origin`, `v_dim_lead_profile`, `v_dim_sales_rep`, `v_fact_lead_funnel`; `is_from_funnel` in `v_dim_seller` | delete / remove column |
-| dbt tests | `assert_reconcile_funnel_won.sql`; `fact_lead_funnel` entry in `assert_fact_unknown_key_share.sql` | delete / remove entry |
-| dbt quality | `dq_issue_summary.sql`: `funnel_issues` CTE, `funnel_seller_not_in_sellers`, row count of `fact_lead_funnel` | remove |
-| ML | `ml/seller_risk/` (channel value from `fact_lead_funnel`), `ml.channel_value`, `ml.seller_risk_score` | delete (see 3.4) |
-| ML | `ml/crm_segment_voucher/`, `ml.customer_segment_history`, `ml.voucher_allocation` | delete (see 3.4); `v_dim_customer` no longer joins a segment |
-| KPI | Lead conversion, Days to close | remove from `implementation.md` §8 and `kpi_dictionary.md` |
-| Power BI | page 6 *Lead Funnel & Channel Value*, page 7 *CRM Segments & Voucher Allocation* | remove; new page plan in section 7 |
-| Docs | `docs/profiling.md` rows `raw.mql`, `raw.closed_deals`, assumption A6 | mark as *obsolete (funnel removed 2026-11-06)*, keep for history |
+Done in PR #5 (funnel, all business logic, old ML) and PR #6 (supporting sources, outdated docs). The full list is in
+the changelog of `implementation.md` (section 14); the removed code is still available at commit `83891b5`.
 
-### 3.4 What is kept although no problem is built around it
+### 3.4 Old artefacts worth rebuilding although no problem is built around them
 
 | Artefact | Why it stays |
 | --- | --- |
 | `fact_review` | Late delivery is the main driver of low review scores; P1 shows the cost of being late (score by late / on-time), P3 uses satisfaction per category |
-| `fact_payment`, `dim_payment_type` | Cheap to keep (already built and tested); P2 can show instalment usage per area as an adoption signal. Not required by any ML module |
+| `fact_payment`, `dim_payment_type` | Optional: P2 can show instalment usage per area as an adoption signal. Not required by any ML module (open question Q1) |
 | `dim_seller` SCD Type 2 (seller tier) + `fact_seller_month` | Required for the course (SCD2 is a graded concept). In P1 the tier explains part of the dispatch delay (late sellers vs late carriers); in P2 the count of Silver/Gold sellers per area is a supply-quality signal |
 | `fact_seller_product_activity` | Factless fact, course concept; P3 uses it to count active sellers per category |
-| M3 late-delivery risk model (design) | Reused as the core of P1 ML (section 6.1) |
-| M5 GMV forecast (design) | Generalised into the area forecast (P2) and the category forecast (P3) |
-| M7 recommendations (`ml.recommendations`) | Kept as the *Choice* output for all three problems, with new `decision_maker` values |
+| Old late-delivery risk model design | Reused as the core of P1 ML (section 6.1) |
+| Old GMV forecast design | Generalised into the area forecast (P2) and the category forecast (P3) |
+| Old recommendations table (`ml.recommendations`) | Kept as the *Choice* output for all three problems, with new `decision_maker` values |
 
 ---
 
@@ -195,11 +181,11 @@ Note on `category_key`: `dim_product` is at product grain. Two options — (a) a
 level), or (b) keep `category_en` as a degenerate text key in the fact. **Recommendation: (a)**, it also gives the
 report a concrete star-vs-snowflake example (previously only discussed for `dim_geography`).
 
-### 4.5 Unchanged
+### 4.5 Carried over from the old design (to rebuild)
 
-`fact_order_item`, `fact_order_fulfillment`, `fact_review`, `fact_payment`, all surrogate-key, unknown-member and
-ratio conventions (`implementation.md` §7.3), staging rules (§9, minus the funnel bullet), SCD2 rules (§10),
-incremental load design (§12).
+`fact_order_item`, `fact_order_fulfillment`, `fact_review`, `fact_payment` keep their old grain as a starting point.
+Conventions for surrogate keys, unknown members, ratios, staging rules and SCD2 must be agreed again
+(`docs/rebuild_guide.md` sections 2–4); the old versions are at commit `83891b5`.
 
 ---
 
@@ -219,7 +205,7 @@ Added (definitions follow the existing rule: store numerator and denominator, ne
 | Avg seller–customer distance | P1 | | Σ distance_km / orders with distance |
 | Review gap late vs on-time | P1 | Avg score on-time − avg score late | from fact_review joined to fulfilment flag |
 | Market size (GMV) | P2 | GMV placed by customers in the area | Σ gmv_placed |
-| Orders per 1,000 inhabitants | P2 | E-commerce adoption, state level only (population seed) | Σ orders_placed / state_population × 1,000 |
+| Orders per 1,000 inhabitants | P2 | E-commerce adoption, state level only *(needs seed)* | Σ orders_placed / state_population × 1,000 |
 | Active customers | P2 | | Σ customers_active (one month) |
 | Active sellers | P2 | | Σ sellers_active (one month) |
 | Customers per seller | P2 | Demand pressure on local supply | active customers / active sellers |
@@ -239,15 +225,15 @@ rate, Cancel rate, Seller late rate, Active sellers) are unchanged.
 
 ## 6. ML and decision support (schema `ml`)
 
-General rules from `implementation.md` §13 still apply: read from `dw` / `bi`, write to `ml` append-only with
+General rules from `implementation.md` section 12 apply: read from `dw` / `bi`, write to `ml` append-only with
 `model_run_id` + `model_version`, register in `meta.model_registry`, time-based split, no leakage, always a
 baseline. Training window: 2017-01 → 2018-05, test: 2018-06 → 2018-08 (20 monthly points, profiling A8).
 
-The current ML code (`ml/*/train.py`) is still stubs, so the modules below replace M3–M7 rather than modify them.
+There is no ML module yet (only `ml/common`); the modules below are new.
 
 ### 6.1 P1 — Warehouse placement and courier allocation (Logistics Manager)
 
-**ML-1a. Late-delivery risk model** (reuses the M3 design)
+**ML-1a. Late-delivery risk model** (based on the old late-risk design)
 
 - Target: `is_late` at purchase time. Features: seller–customer distance, seller state → customer state, seller
   historical late rate (before the purchase date), seller tier at purchase (SCD2 point-in-time), category group,
@@ -287,7 +273,7 @@ The current ML code (`ml/*/train.py`) is still stubs, so the modules below repla
 
 **ML-2a. Area demand forecast**
 
-- Monthly GMV and orders per state (27 series) and per region (5 series); per zip_prefix_2 only if the series are
+- Monthly GMV and orders per state (27 series) and per region (5 series, *needs seed*); per zip_prefix_2 only if the series are
   dense enough (decide during EDA).
 - Models: seasonal-naive and moving-average baselines vs ETS (statsmodels). Metric: MAPE / sMAPE on the 3 test
   months. With 20 points, simple models are the honest choice; the report states this.
@@ -297,7 +283,7 @@ The current ML code (`ml/*/train.py`) is still stubs, so the modules below repla
 **ML-2b. Area segmentation**
 
 - Unit: state (and zip_prefix_2 as a second level). Features from `fact_geo_month` over the last 12 months:
-  orders per 1,000 inhabitants (state level), GMV, YoY growth, AOV, customers per seller, local fulfilment share,
+  orders per 1,000 inhabitants (state level, *needs seed*), GMV, YoY growth, AOV, customers per seller, local fulfilment share,
   late rate, average delivery days.
 - Method: standardise → K-means (k chosen by silhouette, expected 4–5) with a rule-based labelling of clusters,
   e.g. *Core market*, *Underserved high demand* (high demand, low local supply, high late rate), *Emerging*
@@ -342,16 +328,16 @@ Unchanged DDL. `decision_maker` ∈ {`logistics`, `expansion`, `category`}; `sub
 `state`, `zip_prefix_2`, `category`}. Each row keeps `action`, `rationale`, `score`, `status = 'proposed'`, and can
 be accepted / rejected through `meta.decision_log` (COULD).
 
-### 6.5 DDL changes (`docker/postgres/init/03_ml.sql`)
+### 6.5 ML tables to create (`docker/postgres/init/03_ml.sql`, new file)
 
-| Action | Tables |
+| Problem | Tables |
 | --- | --- |
-| Keep | `order_late_risk`, `recommendations` |
-| Remove | `promise_whatif`, `customer_segment_history`, `voucher_allocation`, `seller_risk_score`, `channel_value` |
-| Rename / generalise | `gmv_forecast` → `area_forecast` |
-| Add | `late_risk_drivers`, `hub_scenario`, `hub_location`, `courier_plan`, `area_segment`, `area_opportunity`, `category_forecast`, `category_opportunity` |
+| P1 | `order_late_risk`, `late_risk_drivers`, `hub_scenario`, `hub_location`, `courier_plan` |
+| P2 | `area_forecast`, `area_segment`, `area_opportunity` |
+| P3 | `category_forecast`, `category_opportunity` |
+| shared | `recommendations` |
 
-`promise_whatif` (promise-date buffer) is dropped from the core scope; it can come back as a COULD on the P1 page
+A promise-date what-if (`promise_whatif`, old design) is not in the core scope; it can come back as a COULD on the P1 page
 if time allows, since the data shows Olist promises ~23.7 days for a ~12.6-day average delivery.
 
 ### 6.6 Code layout
@@ -366,8 +352,7 @@ ml/
 └── recommendations.py      # reads the three problems' outputs → ml.recommendations
 ```
 
-`ml/crm_segment_voucher/`, `ml/seller_risk/`, `ml/gmv_forecast/`, `ml/late_risk/` are removed (their content moves
-into the folders above). `make ml` and the Airflow DAG run `p1_logistics`, `p2_regional`, `p3_category` in parallel,
+`make ml` and the Airflow DAG run `p1_logistics`, `p2_regional`, `p3_category` in parallel,
 then `recommendations`.
 
 ---
@@ -376,14 +361,15 @@ then `recommendations`.
 
 ### 7.1 `bi` views
 
-| Action | Views |
-| --- | --- |
-| Remove | `v_dim_lead_origin`, `v_dim_lead_profile`, `v_dim_sales_rep`, `v_fact_lead_funnel` |
-| Change | `v_dim_seller` (drop `is_from_funnel`), `v_dim_customer` (no segment join), `v_dim_customer_geo` / `v_dim_seller_geo` (new zip_prefix_3 / zip_prefix_2 / geo_cell columns) |
-| Add (dw) | `v_fact_geo_month`, `v_fact_category_month`, `v_dim_category` (if option 4.4 a), `v_dim_state` (state-level geography + population, for `fact_category_month` and per-capita KPIs) |
-| Add (ml, latest `model_run_id` only) | `v_order_late_risk`, `v_late_risk_drivers`, `v_hub_scenario`, `v_hub_location`, `v_courier_plan`, `v_area_forecast`, `v_area_segment`, `v_area_opportunity`, `v_category_forecast`, `v_category_opportunity`, `v_recommendations` |
+All views are new (the `bi` layer is empty after the reset).
 
-### 7.2 Power BI pages (replaces the 8-page plan in `implementation.md` §14.2)
+| Group | Views |
+| --- | --- |
+| Dimensions | `v_dim_date`, `v_dim_product`, `v_dim_seller`, `v_dim_customer`, `v_dim_customer_geo` / `v_dim_seller_geo` (with zip_prefix_3 / zip_prefix_2 / geo_cell columns), `v_dim_order_status` |
+| Facts (dw) | `v_fact_sales`, `v_fact_fulfillment`, `v_fact_review`, `v_fact_geo_month`, `v_fact_category_month`, `v_dim_category` (if option 4.4 a), `v_dim_state` (state-level geography, + region / population if seeded) |
+| ML (latest `model_run_id` only) | `v_order_late_risk`, `v_late_risk_drivers`, `v_hub_scenario`, `v_hub_location`, `v_courier_plan`, `v_area_forecast`, `v_area_segment`, `v_area_opportunity`, `v_category_forecast`, `v_category_opportunity`, `v_recommendations` |
+
+### 7.2 Power BI pages
 
 | # | Page | Problem | Simon phase | Main visuals |
 | --- | --- | --- | --- | --- |
@@ -396,14 +382,14 @@ then `recommendations`.
 | 7 | Category Opportunities | P3 | Design / Choice | Growth–share matrix (scatter), category forecast, quality flags, HHI, recommended action per category |
 | 8 | Data Quality & Pipeline Health | all | Trust | Unchanged |
 
-Owners are reassigned in `PROJECT_PLAN.md` (open question Q4).
+Owners: `docs/PROJECT_PLAN.md`.
 
 ---
 
 ## 8. Orchestration and Makefile
 
 ```
-[download_kaggle, copy_manual, gen_holidays] → upload_to_lake → load_raw
+download_kaggle → upload_to_lake → load_raw
   → dbt_deps → dbt_seed → dbt_build (stg, dw, bi)
   → [ml_p1_logistics, ml_p2_regional, ml_p3_category] → ml_recommendations
   → meta_publish → dbt_docs_generate
@@ -416,20 +402,8 @@ No other target changes.
 
 ## 9. Migration plan
 
-Work is split into three PRs so each one keeps `dbt build` green. Branch names follow `feat/<task-id>-<desc>`.
-
-| PR | Task IDs | Content | Done when |
-| --- | --- | --- | --- |
-| 1. Remove funnel | R0-1 … R0-4 | Section 3.3 in full: ingestion, `data/raw/marketing_funnel/`, staging, lead dims, `fact_lead_funnel`, `dim_seller` funnel union, bi views, tests, `dq_issue_summary`, ML stubs and DDL for CRM / seller risk / channel value | `make all` from a clean DB passes; `raw` has 12 tables; no reference to `mql`, `closed_deals`, `lead_`, `funnel` outside `docs/profiling.md` history and the changelog |
-| 2. Warehouse for the three problems | R1-1 (`dim_geography` columns), R2-1 (`fact_geo_month`), R3-1 (`dim_category`, `fact_category_month`), R-T (tests), R-BI (bi views) | Section 4 and 7.1 (dw part) | New facts have YAML + key tests; reconciliation: Σ `gmv_placed` = Σ `gmv_sold` = Σ GMV of `fact_order_item`; Σ `late_orders` of `fact_geo_month` = Σ `is_late` of `fact_order_fulfillment`; Σ `items` of `fact_category_month` = item count of `fact_order_item` |
-| 3. ML and Power BI | R1-2 … R1-4 (ML-1a/b/c), R2-2 … R2-4 (ML-2a/b/c), R3-2, R3-3 (ML-3a/b), R-REC, R-PBI | Section 6, 7.1 (ml part), 7.2 | Each module registered in `meta.model_registry` with baseline vs model metrics; pages 2–7 built |
-
-Documentation updates go with PR 1 (scope, sources, changelog) and PR 2 (warehouse, KPI dictionary), so the
-design document never describes something that does not exist yet.
-
-Suggested order given the deadline (2026-11-13): PR 1 on 06–07/11, PR 2 on 07–09/11, PR 3 on 08–12/11 (ML and
-Power BI start on 08/11 against stub tables with the final schema, as in the original plan), report and demo
-rehearsal on 12–13/11.
+Superseded. The removal is done (section 3.3); the rebuild order is in `docs/rebuild_guide.md` section 8 and the
+work split per member in `docs/PROJECT_PLAN.md`.
 
 ---
 
@@ -441,7 +415,7 @@ rehearsal on 12–13/11.
 | Distance substitution in ML-1b (hub–customer instead of seller–customer) | Predicted late rate per scenario is an extrapolation | Label it *indicative*; show distance metrics, which need no model, next to it |
 | Short time series (20 months), Olist growth phase in 2017 | YoY growth in early 2017 and forecasts are noisy; growth partly reflects Olist's own expansion | Use the last 12 months for growth features, compare against simple baselines, show intervals |
 | Sparse zip prefixes (~19k zips, ~99k orders) | Zip-level rates are unstable | Rates only at zip_prefix_2 / state / geo cell with a minimum-volume filter; zip level used for maps of counts only |
-| Population only at state level | Per-capita adoption only for 27 states | Use customers per seller and growth at lower levels |
+| No population data in the dataset | Per-capita adoption needs an external seed (decision) and exists only per state | Use customers per seller and growth; add the population seed only if the team agrees |
 | Category = Olist taxonomy (73 categories, 610 products `unknown`) | Some categories are thin or ambiguous | Forecast at category-group level for the long tail; keep `unknown` visible as its own row |
 
 ---
@@ -450,8 +424,8 @@ rehearsal on 12–13/11.
 
 | # | Question | Default if no answer |
 | --- | --- | --- |
-| Q1 | Keep `fact_payment` and the payment views, or drop them to shrink scope? | Keep (already built, no extra work) |
+| Q1 | Keep `fact_payment` and the payment views, or drop them to shrink scope? | Keep only if a problem needs it (no longer "already built" after the reset) |
 | Q2 | `fact_category_month`: add `dim_category` (option a) or keep the category as a degenerate key (option b)? | Option a |
 | Q3 | Bring back the promise-date what-if (`ml.promise_whatif`) on page 3? | COULD, only after pages 2–7 are done |
-| Q4 | New ownership: one member per problem (P1 / P2 / P3) end to end, or keep the layer split (platform / dims / facts / ML)? | Keep the layer split for PR 1–2; split PR 3 by problem |
+| Q4 | New ownership: one member per problem (P1 / P2 / P3) end to end, or keep the layer split (platform / dims / facts / ML)? | See `docs/PROJECT_PLAN.md` |
 | Q5 | Rename the decision-maker roles in the report (Logistics Manager, Expansion Manager, Category Manager)? | Use these names |
