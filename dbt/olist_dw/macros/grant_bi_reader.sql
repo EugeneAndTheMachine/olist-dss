@@ -1,5 +1,5 @@
 {#-
-    User chỉ đọc cho Power BI (F6): chỉ thấy schema bi.
+    User chỉ đọc cho Power BI: chỉ thấy schema bi.
     View Postgres chạy với quyền của owner (user dbt) → powerbi_reader đọc được view
     mà không cần quyền trên dw / stg / meta. Gọi ở on-run-end mỗi lần dbt chạy (idempotent).
     alter default privileges: view dbt tạo lại sau này tự có quyền select.

@@ -1,6 +1,6 @@
 # Power BI — hướng dẫn setup
 
-Chủ file: **Xuân Vinh (TV3)**. Trang 2, 4, 7 do **Trường An (TV4)** làm rồi gửi để ghép (CLAUDE.md mục 14.2).
+Người phụ trách và trang của từng bài toán: `docs/PROJECT_PLAN.md`. Kế hoạch trang: `docs/refactor_plan.md` mục 7.2.
 Power BI Desktop **chỉ chạy trên Windows**.
 
 > Semantic model, measure và nội dung từng trang làm lại sau khi chốt nghiệp vụ: **`docs/rebuild_guide.md`** (bước 4–6) và `docs/refactor_plan.md` mục 7.
@@ -31,8 +31,7 @@ Power BI Desktop **chỉ chạy trên Windows**.
 
 ## 3. Quy ước semantic model
 
-- Mô hình galaxy: dim conformed dùng chung. Role-playing geography bằng 2 view riêng (`v_dim_customer_geo`,
-  `v_dim_seller_geo`); role-playing date bằng 1 bảng `Date` + relationship inactive, bật bằng `USERELATIONSHIP` trong measure.
+- Mô hình galaxy: dim conformed dùng chung giữa các bài toán. Cách xử lý role-playing dimension (date, geography của customer / seller) chốt khi làm lớp `bi`.
 - Mọi DAX measure để trong bảng `_Measures`, **đúng định nghĩa** trong KPI dictionary (viết lại ở `docs/rebuild_guide.md`, bước 4).
   Tỷ lệ luôn = tổng tử số / tổng mẫu số (vd. `Late Rate = DIVIDE(SUM(is_late), SUM(is_delivered))`).
 - What-if parameter đọc bảng kịch bản tính sẵn trong schema `bi` (view trên output ML, `docs/refactor_plan.md` mục 6–7).
@@ -41,5 +40,5 @@ Power BI Desktop **chỉ chạy trên Windows**.
 
 - Lưu thành `powerbi/olist_dw.pbip` (*File → Save as → Power BI project files*). Thư mục `.SemanticModel/` và `.Report/` là text → commit được.
 - `.gitignore` đã bỏ qua `.pbi/localSettings.json` và `.pbi/cache.abf`.
-- Tránh hai người sửa cùng lúc một file: TV4 làm trang 2, 4, 7 trên bản copy rồi gửi TV3 ghép, hoặc chia trang rõ ràng và pull trước khi mở.
+- Tránh hai người sửa cùng lúc một file: mỗi người làm trang của bài toán mình trên bản copy rồi gửi người giữ file ghép, hoặc chia trang rõ ràng và pull trước khi mở.
 - Refresh dữ liệu: *Home → Refresh* sau mỗi lần `make build` / `make ml`.

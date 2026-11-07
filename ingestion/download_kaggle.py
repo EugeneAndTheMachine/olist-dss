@@ -1,4 +1,4 @@
-"""P3 — Đưa 2 dataset Kaggle vào landing local.
+"""Đưa dataset Kaggle olistbr/brazilian-ecommerce vào landing local.
 
 Thứ tự ưu tiên:
 1. Nếu thư mục tải tay (LOCAL_RAW_DIR, mặc định data/raw/) có đủ file → copy sang landing.

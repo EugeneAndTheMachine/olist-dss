@@ -1,4 +1,4 @@
--- S1 Profiling — query dùng cho docs/profiling.md (chạy trên schema raw, mọi cột là text).
+-- Profiling — query dùng cho docs/profiling.md (chạy trên schema raw, mọi cột là text).
 -- Chạy: docker compose exec -T postgres psql -U olist -d olist_dw < docs/profiling.sql
 
 \pset footer off
@@ -13,8 +13,7 @@ union all select 'sellers', count(*), count(distinct seller_id) from raw.sellers
 union all select 'products', count(*), count(distinct product_id) from raw.products
 union all select 'geolocation', count(*), count(distinct geolocation_zip_code_prefix) from raw.geolocation
 union all select 'translation', count(*), count(distinct product_category_name) from raw.product_category_name_translation
-union all select 'mql', count(*), count(distinct mql_id) from raw.mql
-union all select 'closed_deals', count(*), count(distinct mql_id) from raw.closed_deals;
+;
 
 \echo == A1 order_status / payment_type
 select order_status, count(*) from raw.orders group by 1 order by 2 desc;
@@ -45,7 +44,7 @@ select count(*) reviews, count(distinct review_id) uniq_review_id, count(distinc
        (select count(*) from raw.orders o where not exists (select 1 from raw.order_reviews r where r.order_id = o.order_id)) orders_without_review
 from raw.order_reviews;
 
-\echo == A3 geolocation (bbox theo implementation.md mục 9: lat -34..5.5, lng -74..-34)
+\echo == A3 geolocation (bbox Brazil: lat -34..5.5, lng -74..-34)
 select count(*) n_rows, count(distinct geolocation_zip_code_prefix) zips,
        count(*) filter (where geolocation_lat::numeric not between -34 and 5.5
                            or geolocation_lng::numeric not between -74 and -34) outside_bbox,
@@ -92,16 +91,6 @@ from j;
 select o.order_status, count(*) orders_without_items from raw.orders o
 where not exists (select 1 from raw.order_items i where i.order_id = o.order_id) group by 1 order by 2 desc;
 
-\echo == A6 funnel
-select count(*) deals,
-       count(*) filter (where seller_id in (select seller_id from raw.sellers)) in_sellers,
-       count(*) filter (where seller_id in (select seller_id from raw.order_items)) with_sales,
-       count(*) filter (where mql_id not in (select mql_id from raw.mql)) deal_not_in_mql,
-       count(*) filter (where won_date::timestamp::date + 90 <= date '2018-08-31') full_90d_window
-from raw.closed_deals;
-select coalesce(origin, '(null)') origin, count(*) leads, count(d.mql_id) won
-from raw.mql m left join raw.closed_deals d using (mql_id) group by 1 order by 2 desc;
-
 \echo == A7 khách mua lặp
 with c as (select cu.customer_unique_id, count(distinct o.order_id) n
            from raw.orders o join raw.customers cu using (customer_id) group by 1)
@@ -134,7 +123,7 @@ from d;
 select count(*) filter (where n_sellers > 1) multi_seller_orders, max(n_items) max_items, round(avg(n_items), 2) avg_items
 from (select order_id, count(*) n_items, count(distinct seller_id) n_sellers from raw.order_items group by 1) x;
 
-\echo == Hiệu chỉnh tier seller: đơn / seller / tháng; late rate seller (>= 20 đơn đã giao)
+\echo == Phân bố seller: đơn / seller / tháng; late rate seller (>= 20 đơn đã giao)
 with sm as (select seller_id, m, count(*) n from (
               select distinct i.order_id, i.seller_id, date_trunc('month', o.order_purchase_timestamp::timestamp) m
               from raw.order_items i join raw.orders o using (order_id)
@@ -149,6 +138,7 @@ select count(*) sellers, percentile_cont(array[0.5, 0.75, 0.9]) within group (or
        count(*) filter (where lr >= 0.15) late_ge_15pct
 from s;
 
-\echo == Bang khớp br_states
-select (select string_agg(distinct seller_state, ',') from raw.sellers where seller_state not in (select state_code from raw.br_states)) seller_state_unknown,
-       (select string_agg(distinct customer_state, ',') from raw.customers where customer_state not in (select state_code from raw.br_states)) cust_state_unknown;
+\echo == Danh sách bang của customers và sellers
+select (select count(distinct customer_state) from raw.customers) customer_states,
+       (select count(distinct seller_state) from raw.sellers) seller_states,
+       (select string_agg(distinct customer_state, ',' order by customer_state) from raw.customers) customer_state_list;

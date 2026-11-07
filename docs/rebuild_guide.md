@@ -1,6 +1,6 @@
 # Rebuild Guide: Business Logic from Raw to Dashboard
 
-> Written 2026-11-06, together with the PR that removed the old business logic.
+> Written 2026-11-06 (PR #5, business logic removed); updated 2026-11-07 (PR #6, supporting sources removed).
 > Target design (what to build): `docs/refactor_plan.md`. This guide covers **how** to rebuild it, one business
 > decision at a time.
 > Facts about the data (counts, anomalies) that each decision depends on: `docs/profiling.md`, `docs/profiling.sql`.
@@ -17,11 +17,12 @@ each decision is made explicitly, written down, and then implemented.
 | --- | --- |
 | Docker Compose, Makefile, `.env.example`, uv | All dbt models: `staging/stg_*`, `intermediate/int_*`, `warehouse/dims`, `warehouse/facts`, `bi`, `quality` |
 | `docker/postgres/init/00`–`02` (databases, schemas `raw stg dw bi ml meta`, `meta.*` tables) | All dbt singular tests (`tests/*.sql`) |
-| `ingestion/*`: Kaggle / manual files → landing → Azure Blob → `raw` (all columns text, append-only), `meta_publish.py` | Seeds `order_status_map`, `category_group`, `instalment_band`, `seller_tier_rules` |
-| `data/raw/ecom_dataset/`, `data/raw/events_brazilstates/` | Macros `cleaning.sql`, `haversine.sql` (incl. `lag_days`), `unknown_member.sql`, `tier_sort.sql` |
+| `ingestion/*`: `data/raw` or Kaggle → landing → Azure Blob → `raw` (all columns text, append-only), `meta_publish.py` | Seeds `order_status_map`, `category_group`, `instalment_band`, `seller_tier_rules` |
+| `data/raw/ecom_dataset/` (the only source) | Macros `cleaning.sql`, `haversine.sql` (incl. `lag_days`), `unknown_member.sql`, `tier_sort.sql` |
 | dbt skeleton: `dbt_project.yml`, `profiles.example.yml`, `packages.yml` (dbt_utils), `models/staging/_sources.yml` (raw + meta sources) | `dbt_project.yml` vars `date_spine_*`, `scd_*`, `seller_tier_rule_version`; folder config `quality` |
 | Macros `generate_schema_name`, `int_sk`, `grant_bi_reader` | ML stubs `ml/late_risk`, `crm_segment_voucher`, `gmv_forecast`, `seller_risk`, `recommendations.py`; DDL `docker/postgres/init/03_ml.sql`; the `ml` source |
-| Seed `br_state_population` (reference data from IBGE, not a decision) | Marketing Funnel dataset (`data/raw/marketing_funnel/`, `raw.mql`, `raw.closed_deals`) |
+| — | Marketing Funnel dataset (`data/raw/marketing_funnel/`, `raw.mql`, `raw.closed_deals`) |
+| — | Supporting sources: `data/raw/events_brazilstates/` (`br_states`, `calendar_events`), `gen_holidays.py` (`br_holidays`), `copy_manual.py`, seed `br_state_population` |
 | `ml/common/` (db access, `model_run_id`, registry, time split) | Docs `kpi_dictionary.md`, `bi_layer.md`, `implementation_walkthrough.md`, `powerbi_guide.md` |
 | Airflow DAG (ingest → load → dbt → meta), `scripts/replay_month.py` | ML tasks in the DAG and in `make ml` |
 
@@ -37,8 +38,8 @@ git show 83891b5:docs/kpi_dictionary.md                               # old KPI 
 
 Old code is a **reference, not a default**. Restore a file only after the decision it encodes has been agreed.
 
-**State of the pipeline now.** `make up && make ingest && make load-raw` loads 12 raw tables
-(9 e-commerce + `br_holidays`, `br_states`, `calendar_events`). `make seed` loads `br_state_population` into `stg`.
+**State of the pipeline now.** `make up && make ingest && make load-raw` loads the 9 raw tables
+of the Olist e-commerce dataset. There are no seeds yet.
 `make build` has no models yet. `make meta` and `make docs` still work.
 
 ---
@@ -81,7 +82,7 @@ No joins across sources and no KPIs here, except where a decision says otherwise
 | BR-S2 | Empty strings and whitespace | profiling: empty CSV cells load as `NULL` already | `nullif(trim(col), '')` everywhere (macro `clean_text`) |
 | BR-S3 | Zip prefix format | A9: all zips are 5 characters in raw, 23,995 customer zips start with `0` | `lpad(trim(zip), 5, '0')` (macro `zip5`), kept as a safeguard |
 | BR-S4 | City names have accents and inconsistent spelling | A3: 8,011 raw city values → 5,969 after `lower(unaccent())`; extension `unaccent` exists in the DB | `regexp_replace(lower(public.unaccent(trim(city))), '\s+', ' ', 'g')` (macro `clean_city`) |
-| BR-S5 | State code format | `br_states` matches 100% of customer / seller states | `upper(trim(state))` (macro `state_code`) |
+| BR-S5 | State code format | 27 customer states, 23 seller states, all 2-letter codes | `upper(trim(state))` (macro `state_code`) |
 | BR-S6 | Bad data: drop, fix or flag? | Profiling finding 2 (timestamps out of order) | Never drop rows; keep the value, add a `_dq_issue` text column, null only values that are impossible |
 | BR-S7 | Where are derived flags (`is_delivered`, `is_late`, `delay_days`) computed: staging or fact? | — | Staging (`stg_orders`), reused by facts. Decide again: computing them in the fact keeps staging free of KPI logic |
 
@@ -98,7 +99,6 @@ No joins across sources and no KPIs here, except where a decision says otherwise
 | `products` → `stg_products` | (1) Missing category (2) Category without translation (3) Weight 0 (4) Typo columns `*_lenght` (5) Size / weight bands | A4: 610 products (1,603 items) without category; 13 products in 2 untranslated categories; 4 products with weight 0; 2 without dimensions | Missing → `unknown`; untranslated → keep PT name; weight 0 → null; rename to `*_length`; `volume_cm3` = L × H × W; bands by CASE |
 | `geolocation` → `stg_geolocation` | (1) ~52.6 points per zip: how to reduce to one? (2) Points outside Brazil (3) Zip in several states | A3: 42 points (21 zips) outside the bbox, 5 zips entirely outside; 8 zips in > 1 state | One row per zip: mean lat / lng of points inside bbox lat −34…5.5, lng −74…−34; city / state = most frequent value; zips fully outside → lat / lng null |
 | `product_category_name_translation` | — | 71 rows, 2 categories missing | Plain typing |
-| `br_states`, `calendar_events`, `br_holidays` | One holiday date can appear twice | 27 states; 52 events; 36 holidays | Holidays: one row per date |
 
 ### 2.3 Definition of done (staging)
 
@@ -152,7 +152,7 @@ one bus matrix (refactor plan §4.1):
 | --- | --- | --- | --- |
 | BR-W1 | Surrogate keys: sequence or hash? | Hash is stable across full rebuilds and incremental loads | `int_sk(natural key)` (kept macro) |
 | BR-W2 | Missing dimension members | Facts must not lose rows when a lookup fails | Unknown member key `-1` in every dim; date key `-1` when the event has not happened |
-| BR-W3 | Date dimension range | Orders 2016-09 → 2018-10; holidays file 2016–2019 | `dim_date` 2016-01-01 → 2019-12-31 via `dbt_utils.date_spine` (vars `date_spine_start` / `date_spine_end` — re-add to `dbt_project.yml`) |
+| BR-W3 | Date dimension range; holiday / event flags? | Orders 2016-09 → 2018-10. No holiday data in the dataset any more: flags such as Black Friday need a seed (BR-W12) | `dim_date` 2016-01-01 → 2019-12-31 via `dbt_utils.date_spine` (vars `date_spine_start` / `date_spine_end` — re-add to `dbt_project.yml`) |
 | BR-W4 | Analysis window for time series / ML | A8: 2016 and 09–10/2018 are almost empty; 2017-01 → 2018-08 holds 99.6% of orders | `ANALYSIS_START = 2017-01-01`, `ANALYSIS_END = 2018-08-31` (still in `.env` and `dbt_project.yml`); all data stays in `dw`, the filter applies to KPIs over time and ML |
 | BR-W5 | Orders with several sellers: who owns the order for order-level facts? | Finding 5: 1,278 orders (1.3%) | Primary seller = seller of the highest-price item; tie → smallest `seller_id` |
 | BR-W6 | Order value: with or without freight? | A5: Σ payment is +1.0% over Σ item_total (interest, vouchers) | `order_value` = Σ price (same basis as GMV); freight separate |
@@ -161,13 +161,14 @@ one bus matrix (refactor plan §4.1):
 | BR-W9 | Geography grain and hierarchy | ~19k zip prefixes; CEP is hierarchical | Old: zip → city → state → region. New (refactor plan §4.2): add `zip_prefix_3`, `zip_prefix_2`, geo grid cell. Zip set = geolocation ∪ customers ∪ sellers (A3: 157 customer zips and 7 seller zips are missing from geolocation) |
 | BR-W10 | Keep the seller tier SCD Type 2? | Course requirement; tier is used in P1 / P2 as a supporting signal | Old rules in `implementation.md` §10 (versions from monthly 3-month rolling metrics, first version valid from 1900-01-01) |
 | BR-W11 | Flags in facts: boolean or 0/1? | Power BI sums 0/1 directly | Integer 0/1 |
+| BR-W12 | Reference data outside the dataset: state → region (5 regions), holidays / retail events, state population. Needed? | Removed on 2026-11-07 to keep one dataset. Region is needed for P1 / P2 maps; population only for per-capita KPIs | Old: `br_states.csv`, package `holidays`, seed `br_state_population` (restore from `83891b5` as seeds if agreed) |
 
 ### 4.2 Models to build (target from `docs/refactor_plan.md` §4)
 
 | Model | Grain | Problem | Key decisions it depends on |
 | --- | --- | --- | --- |
-| `dim_date` | 1 day | all | BR-W3, holiday join |
-| `dim_geography` (+ zip_prefix_3 / _2, geo cell) | 1 zip prefix | P1, P2 | BR-S3, BR-S4, geolocation rules, BR-W9 |
+| `dim_date` | 1 day | all | BR-W3, BR-W12 |
+| `dim_geography` (+ zip_prefix_3 / _2, geo cell) | 1 zip prefix | P1, P2 | BR-S3, BR-S4, geolocation rules, BR-W9, BR-W12 (region) |
 | `dim_customer` | 1 `customer_unique_id` | P2 | customer definition, BR-W8 |
 | `dim_product`, `dim_category` | 1 product / 1 category | P3 | product rules, `category_group` seed |
 | `dim_seller` | 1 seller (or 1 seller version if BR-W10 = yes) | P1, P2, P3 | BR-W10 |
@@ -248,7 +249,7 @@ Each step depends on the previous one. Steps 1–2 can be split by source table;
 | Step | Output | Done when |
 | --- | --- | --- |
 | 0 | `docs/business_rules.md` with BR-S*, then BR-W*, BR-K* filled in as they are decided | Every rule used in code has a row |
-| 1 | `stg_*` for 12 raw tables (+ `int_customer_map` if needed) | §2.3 |
+| 1 | `stg_*` for the 9 raw tables (+ `int_customer_map` if needed) | §2.3 |
 | 2 | Seeds and macros for agreed rules | `dbt seed` green, seeds documented in `_seeds.yml` |
 | 3 | Dims and facts of §4.2 | §4.3 |
 | 4 | `kpi_dictionary.md`, `bi` views, `bi_layer.md` | Views build; every dashboard KPI is in the dictionary |

@@ -1,14 +1,20 @@
 # Olist Data Warehouse & Decision Support
 
-Assignment môn Data Warehouse — nhóm 4 người. Kimball DW + Medallion (Azure Blob / Azurite → PostgreSQL raw/stg/dw/bi) + dbt + Airflow + ML/what-if + Power BI, hỗ trợ 4 người ra quyết định của sàn Olist theo 3 pha Simon.
+Assignment môn Data Warehouse. Kimball DW + Medallion (Azure Blob / Azurite → PostgreSQL raw/stg/dw/bi) + dbt + Airflow + ML + Power BI trên 1 dataset (*Brazilian E-Commerce Public Dataset by Olist*), trả lời 3 bài toán:
 
-- Thiết kế kỹ thuật (nguồn sự thật): [`CLAUDE.md`](CLAUDE.md)
-- Mô tả dự án & phân công: [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md)
-- **Hướng dẫn setup chi tiết: [`docs/SETUP.md`](docs/SETUP.md)**
-- Phạm vi mới (3 bài toán, 1 dataset): [`docs/refactor_plan.md`](docs/refactor_plan.md)
-- **Làm lại phần nghiệp vụ (dbt, KPI, ML): [`docs/rebuild_guide.md`](docs/rebuild_guide.md)**
-- Data lake trên Azure (Azure for Students): [`docs/AZURE_SETUP.md`](docs/AZURE_SETUP.md)
-- Power BI: [`powerbi/README.md`](powerbi/README.md)
+| # | Dashboard | → ML / quyết định |
+| --- | --- | --- |
+| P1 | Tỷ lệ và mật độ giao trễ theo khu vực | Đặt kho, tăng cường shipper ở khu vực nào |
+| P2 | Quy mô, số đơn, GMV, số customer / seller theo khu vực (zip) | Nên phát triển khu vực nào |
+| P3 | Hạng mục bán chạy, nhu cầu sản phẩm | Nên phát triển hạng mục nào |
+
+> **Trạng thái:** hạ tầng (ingest → raw → meta, Airflow) đã chạy; phần nghiệp vụ (dbt staging / warehouse / bi, KPI, ML, Power BI) đang làm lại từ đầu.
+
+- Thiết kế kỹ thuật (nguồn sự thật): [`implementation.md`](implementation.md)
+- Phạm vi & thiết kế đích: [`docs/refactor_plan.md`](docs/refactor_plan.md)
+- **Làm lại phần nghiệp vụ từng bước: [`docs/rebuild_guide.md`](docs/rebuild_guide.md)**
+- Phân công: [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md)
+- Hướng dẫn setup chi tiết: [`docs/SETUP.md`](docs/SETUP.md) · Azure: [`docs/AZURE_SETUP.md`](docs/AZURE_SETUP.md) · Power BI: [`powerbi/README.md`](powerbi/README.md)
 
 ## Quickstart
 
@@ -27,26 +33,17 @@ make all                             # up → ingest → load-raw → dbt → ml
 | Airflow (`make up-airflow`) | http://localhost:8080 (admin / admin) |
 | dbt docs (`make docs-serve`) | http://localhost:8081 |
 
-## Thành viên
-
-| Vai trò | Thành viên | Task |
-| --- | --- | --- |
-| TV1 — Data Platform & Orchestration | Ngọc Cẩn | P1–P9 |
-| TV2 — Staging, Dimensions & Data Quality | Minh Hiếu | S1–S7 |
-| TV3 — Facts, Data Marts & BI | Xuân Vinh | F1–F8 |
-| TV4 — ML & Decision Support, trưởng báo cáo | Trường An | M1–M8 |
-
 ## Cấu trúc
 
 ```
-ingestion/        Python: Kaggle/CSV nhóm/holidays → landing → Azure Blob → raw; meta_publish
-dbt/olist_dw/     dbt: staging → intermediate → warehouse (dims, facts) → bi
-ml/               M3–M7: late risk, CRM voucher, GMV forecast, seller risk, recommendations
+ingestion/        Python: data/raw hoặc Kaggle → landing → Azure Blob → raw; meta_publish
+dbt/olist_dw/     dbt: staging → intermediate → warehouse (dims, facts) → bi (đang làm lại)
+ml/               common/ (db, model registry, time split); module theo bài toán làm sau
 airflow/dags/     DAG olist_pipeline
-docker/           Dockerfile Airflow, SQL init PostgreSQL (schemas, meta.*, ml.*)
-scripts/          replay_month.py
+docker/           Dockerfile Airflow, SQL init PostgreSQL (schemas, meta.*)
+scripts/          replay_month.py (chưa hiện thực)
 powerbi/          olist_dw.pbip
-docs/             plan, setup, profiling, KPI dictionary, báo cáo
-data/             raw/ (CSV nguồn, commit), landing/ (cache, gitignored)
+docs/             refactor plan, rebuild guide, phân công, setup, profiling, báo cáo
+data/             raw/ecom_dataset/ (9 CSV nguồn, commit), landing/ (cache, gitignored)
 pyproject.toml    dependency Python; uv.lock khoá phiên bản; requirements.txt sinh từ lock
 ```

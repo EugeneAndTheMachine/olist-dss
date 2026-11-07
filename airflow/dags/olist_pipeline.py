@@ -1,6 +1,6 @@
-"""DAG olist_pipeline (P6) — điều phối toàn bộ chuỗi, gọi cùng script/command với Makefile.
+"""DAG olist_pipeline — điều phối toàn bộ chuỗi, gọi cùng script/command với Makefile.
 
-[download_kaggle, copy_manual, gen_holidays] → upload_to_lake → load_raw
+download_kaggle → upload_to_lake → load_raw
   → dbt_deps → dbt_seed → dbt_build
   → (ML: thêm lại theo docs/rebuild_guide.md)
   → meta_publish → dbt_docs_generate
@@ -77,7 +77,7 @@ def task(task_id: str, command: str) -> BashOperator:
 
 with DAG(
     dag_id="olist_pipeline",
-    description="Kaggle/holidays → Azure Blob → raw → dbt (stg, dw, bi) → ML → meta",
+    description="Kaggle → Azure Blob → raw → dbt (stg, dw, bi) → ML → meta",
     start_date=datetime(2026, 10, 1),
     schedule="@daily",
     catchup=False,
@@ -85,11 +85,7 @@ with DAG(
     default_args=default_args,
     tags=["olist", "dw"],
 ) as dag:
-    extract = [
-        task("download_kaggle", "python -m ingestion.download_kaggle"),
-        task("copy_manual", "python -m ingestion.copy_manual"),
-        task("gen_holidays", "python -m ingestion.gen_holidays"),
-    ]
+    extract = task("download_kaggle", "python -m ingestion.download_kaggle")
     upload_to_lake = task("upload_to_lake", "python -m ingestion.upload_to_lake")
     load_raw = task("load_raw", "python -m ingestion.load_raw")
 

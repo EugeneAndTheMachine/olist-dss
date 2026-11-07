@@ -1,5 +1,5 @@
 {#-
-    Surrogate key bigint xác định từ natural key (CLAUDE.md mục 7.3):
+    Surrogate key bigint xác định từ natural key (implementation.md mục 7):
     ('x' || left(md5(concat_ws('|', cols...)), 15))::bit(60)::bigint
     Ổn định giữa các lần build và khi load incremental. Null được thay bằng '' để giữ vị trí cột.
     Dùng: {{ int_sk(['seller_id', 'valid_from']) }}

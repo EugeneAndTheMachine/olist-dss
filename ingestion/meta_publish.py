@@ -1,4 +1,4 @@
-"""P8 — Đẩy metadata của dbt vào schema meta.
+"""Đẩy metadata của dbt vào schema meta.
 
 - target/run_results.json → meta.dq_results (append, mỗi lần chạy 1 run_id = invocation_id của dbt)
   + 1 dòng `dbt:<lệnh>` vào meta.etl_run_log (history of extracts / transformations)

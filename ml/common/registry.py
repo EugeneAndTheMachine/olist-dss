@@ -1,4 +1,4 @@
-"""Sinh model_run_id và đăng ký vào meta.model_registry (CLAUDE.md mục 11.2, 13).
+"""Sinh model_run_id và đăng ký vào meta.model_registry (implementation.md mục 10.2, 12).
 
 Cách dùng:
     run = new_run("<module>", "0.1.0")

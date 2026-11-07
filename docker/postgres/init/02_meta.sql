@@ -1,4 +1,4 @@
--- Bảng metadata (CLAUDE.md mục 11.2). Tạo rỗng để view bi build được ngay lần đầu.
+-- Bảng metadata (implementation.md mục 10.2). Tạo rỗng để view bi build được ngay lần đầu.
 
 create table if not exists meta.etl_run_log (
     log_id      bigserial primary key,

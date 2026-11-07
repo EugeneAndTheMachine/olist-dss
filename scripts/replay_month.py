@@ -1,6 +1,6 @@
-"""P7 (SHOULD) — Replay 1 tháng mua hàng để demo incremental load (cùng F8).
+"""Replay 1 tháng mua hàng để demo incremental load (SHOULD, chưa hiện thực).
 
-Kế hoạch (CLAUDE.md mục 12):
+Kế hoạch (implementation.md mục 11):
 1. Lấy từ landing gốc các dòng có purchase month = --month: orders, order_items, order_payments,
    order_reviews và customers liên quan.
 2. Ghi thành file cùng tên vào data/landing/kaggle/brazilian-ecommerce/extract_date=<hôm nay>-replay-<month>/
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def run(month: str) -> None:
     if not re.fullmatch(r"\d{4}-\d{2}", month):
         raise ValueError("--month phải có dạng YYYY-MM")
-    raise NotImplementedError(f"P7 replay_month chưa hiện thực (month={month}) — xem docstring")
+    raise NotImplementedError(f"replay_month chưa hiện thực (month={month}) — xem docstring")
 
 
 def main() -> None:
