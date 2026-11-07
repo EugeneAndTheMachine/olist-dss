@@ -1,6 +1,0 @@
-instalment_band,min_instalments,max_instalments,is_instalment,sort_order
-1,1,1,false,1
-2-3,2,3,true,2
-4-6,4,6,true,3
-7-10,7,10,true,4
-11+,11,999,true,5

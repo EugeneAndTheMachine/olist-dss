@@ -108,7 +108,6 @@ class RawSource:
 
 
 ECOM = "brazilian-ecommerce"
-FUNNEL = "marketing-funnel-olist"
 
 RAW_SOURCES: list[RawSource] = [
     # Kaggle olistbr/brazilian-ecommerce
@@ -121,9 +120,6 @@ RAW_SOURCES: list[RawSource] = [
     RawSource("kaggle", ECOM, "olist_products_dataset.csv", "products"),
     RawSource("kaggle", ECOM, "olist_geolocation_dataset.csv", "geolocation"),
     RawSource("kaggle", ECOM, "product_category_name_translation.csv", "product_category_name_translation"),
-    # Kaggle olistbr/marketing-funnel-olist
-    RawSource("kaggle", FUNNEL, "olist_marketing_qualified_leads_dataset.csv", "mql"),
-    RawSource("kaggle", FUNNEL, "olist_closed_deals_dataset.csv", "closed_deals"),
     # Python holidays
     RawSource("holidays", "br_holidays", "br_holidays.csv", "br_holidays"),
     # File nhóm tự chuẩn bị (data/raw/events_brazilstates)

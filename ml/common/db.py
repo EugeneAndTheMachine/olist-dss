@@ -27,7 +27,7 @@ def read_sql(query: str, params: dict[str, Any] | None = None) -> pd.DataFrame:
 
 
 def append_df(df: pd.DataFrame, table: str, schema: str = "ml") -> int:
-    """Append vào bảng có sẵn (DDL ở docker/postgres/init/03_ml.sql). Không tạo/đổi bảng."""
+    """Append vào bảng có sẵn (DDL ml.* tạo lại theo docs/rebuild_guide.md, bước 5). Không tạo/đổi bảng."""
     if schema not in WRITABLE_SCHEMAS:
         raise ValueError(f"ML chỉ được ghi vào {WRITABLE_SCHEMAS}, không ghi {schema}")
     if df.empty:

@@ -16,14 +16,7 @@ clean-targets: ["target", "dbt_packages"]
 vars:
   analysis_start: "{{ env_var('ANALYSIS_START', '2017-01-01') }}"
   analysis_end: "{{ env_var('ANALYSIS_END', '2018-08-31') }}"
-  # dim_date: 2016-01-01 → 2019-12-31 (end exclusive)
-  date_spine_start: "2016-01-01"
-  date_spine_end: "2020-01-01"
-  # Chính sách dùng khi tra phiên bản SCD2 mở
-  scd_open_end_date: "9999-12-31"
-  scd_first_valid_from: "1900-01-01"
-  # Bộ ngưỡng tier đang dùng trong seed seller_tier_rules (Seller Quality Manager tăng version khi đổi ngưỡng)
-  seller_tier_rule_version: "v1"
+  # Biến nghiệp vụ (date spine, SCD2, rule version…) thêm khi chốt nghiệp vụ: docs/rebuild_guide.md
 
 # Power BI đăng nhập bằng user chỉ đọc schema bi (macros/grant_bi_reader.sql)
 on-run-end:
@@ -50,10 +43,6 @@ models:
     bi:
       +schema: bi
       +materialized: view
-    # Tổng hợp lỗi chất lượng dữ liệu → schema meta (cạnh dq_results, etl_run_log)
-    quality:
-      +schema: meta
-      +materialized: table
 
 seeds:
   olist_dw:
