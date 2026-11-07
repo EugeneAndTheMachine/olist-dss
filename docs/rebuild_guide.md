@@ -51,7 +51,7 @@ For every business rule:
 1. **State the question** in one sentence (e.g. "Is an order late when delivered on the promised day?").
 2. **Look at the evidence**: the matching row in `docs/profiling.md`, or a new query added to `docs/profiling.sql`.
 3. **List the options** and their effect on the numbers (profiling often already gives both numbers).
-4. **Decide**, and write the decision in `docs/business_rules.md` (new file, one row per rule, template below).
+4. **Decide**, and write the decision in `docs/business_rules.md` (one row per rule, in the section of the part you own; template below).
 5. **Implement** it in exactly one place (one staging model, one seed, or one macro), with a YAML description that
    references the rule ID.
 6. **Test** it (generic test, singular test or reconciliation) so a later change cannot silently break it.
@@ -197,7 +197,7 @@ customer map, the primary seller per order, items aggregated per order.
 
 ## 5. Step 4 — KPI dictionary and `bi` views
 
-Write `docs/kpi_dictionary.md` again **before** the `bi` views and the DAX measures. Each KPI gets: name, business
+Fill in `docs/kpi_dictionary.md` (sections Shared / P1 / P2 / P3) **before** the `bi` views and the DAX measures. Each KPI gets: name, business
 definition, formula (numerator / denominator), source fact, filters, and the rule IDs it depends on. The KPI list
 for the three problems is in `docs/refactor_plan.md` §5. KPI decisions to make explicitly:
 
@@ -220,15 +220,15 @@ Power BI, role-playing dimensions). Old version for reference: `git show 83891b5
 
 Modules, inputs and outputs per problem: `docs/refactor_plan.md` §6. To wire a module into the platform:
 
-1. Create the output tables in a new `docker/postgres/init/03_ml.sql` (append-only, every row has `model_run_id uuid`
+1. Create the output tables in `docker/postgres/init/03_ml_<problem>.sql` (one file per problem, shared tables in `03_ml_shared.sql`) (append-only, every row has `model_run_id uuid`
    and `model_version`). Existing databases do not re-run init scripts: apply it once with
-   `docker compose exec -T postgres psql -U olist -d olist_dw < docker/postgres/init/03_ml.sql`, and add it back to the
+   `docker compose exec -T postgres psql -U olist -d olist_dw < docker/postgres/init/03_ml_<problem>.sql`, and add it to the
    `reset-db` loop in the `Makefile`.
-2. Add the tables as source `ml` in `models/staging/_sources.yml` and create `bi.v_<table>` views that keep only the
+2. Declare the tables as a dbt source per problem (`ml_p1`, `ml_p2`, `ml_p3`, schema `ml`) and create `bi.v_<table>` views that keep only the
    latest `model_run_id` (join `meta.model_registry` on `trained_at`).
 3. Use `ml/common`: `read_sql` / `append_df` (`db.py`), `new_run` / `tag_output` / `register` (`registry.py`),
    `time_split` (`features.py`). Time-based split only; features only known at decision time; always a baseline.
-4. Add the commands to `make ml` and as tasks between `dbt_build` and `meta_publish` in
+4. Add a target `ml-p1` / `ml-p2` / `ml-p3` called by `make ml`, and one task per problem between `dbt_build` and `meta_publish` in
    `airflow/dags/olist_pipeline.py`.
 
 ---
@@ -244,7 +244,7 @@ Modules, inputs and outputs per problem: `docs/refactor_plan.md` §6. To wire a 
 
 ## 8. Order of work and checklist
 
-Each step depends on the previous one. Steps 1–2 can be split by source table; step 3 by problem.
+Each step depends on the previous one. Who builds which part, and how to work in parallel without building the same data twice: `docs/PROJECT_PLAN.md`.
 
 | Step | Output | Done when |
 | --- | --- | --- |

@@ -328,7 +328,7 @@ Unchanged DDL. `decision_maker` ∈ {`logistics`, `expansion`, `category`}; `sub
 `state`, `zip_prefix_2`, `category`}. Each row keeps `action`, `rationale`, `score`, `status = 'proposed'`, and can
 be accepted / rejected through `meta.decision_log` (COULD).
 
-### 6.5 ML tables to create (`docker/postgres/init/03_ml.sql`, new file)
+### 6.5 ML tables to create (`docker/postgres/init/03_ml_p1.sql`, `03_ml_p2.sql`, `03_ml_p3.sql`, `03_ml_shared.sql`)
 
 | Problem | Tables |
 | --- | --- |
@@ -344,15 +344,14 @@ if time allows, since the data shows Olist promises ~23.7 days for a ~12.6-day a
 
 ```
 ml/
-├── common/                 # db.py, registry.py, features.py (unchanged)
-├── forecasting.py          # shared baselines + ETS, used by ML-1c, ML-2a, ML-3a
+├── common/                 # db.py, registry.py, features.py; forecasting.py (shared baselines + ETS for ML-1c, ML-2a, ML-3a, C-M1)
 ├── p1_logistics/           # late_risk.py (ML-1a), hub_placement.py (ML-1b), courier_plan.py (ML-1c)
 ├── p2_regional/            # area_forecast.py, area_segment.py, area_opportunity.py
 ├── p3_category/            # category_forecast.py, category_portfolio.py
 └── recommendations.py      # reads the three problems' outputs → ml.recommendations
 ```
 
-`make ml` and the Airflow DAG run `p1_logistics`, `p2_regional`, `p3_category` in parallel,
+`make ml` (targets `ml-p1`, `ml-p2`, `ml-p3`) and the Airflow DAG run `p1_logistics`, `p2_regional`, `p3_category` in parallel,
 then `recommendations`.
 
 ---
@@ -427,5 +426,5 @@ work split per member in `docs/PROJECT_PLAN.md`.
 | Q1 | Keep `fact_payment` and the payment views, or drop them to shrink scope? | Keep only if a problem needs it (no longer "already built" after the reset) |
 | Q2 | `fact_category_month`: add `dim_category` (option a) or keep the category as a degenerate key (option b)? | Option a |
 | Q3 | Bring back the promise-date what-if (`ml.promise_whatif`) on page 3? | COULD, only after pages 2–7 are done |
-| Q4 | New ownership: one member per problem (P1 / P2 / P3) end to end, or keep the layer split (platform / dims / facts / ML)? | See `docs/PROJECT_PLAN.md` |
+| Q4 | New ownership: one member per problem (P1 / P2 / P3) end to end, or keep the layer split (platform / dims / facts / ML)? | **Decided 2026-11-07**: one member per problem (Cẩn P1, Hiếu P2, Vinh P3); shared data is built once by whoever claims it first (`docs/PROJECT_PLAN.md`) |
 | Q5 | Rename the decision-maker roles in the report (Logistics Manager, Expansion Manager, Category Manager)? | Use these names |

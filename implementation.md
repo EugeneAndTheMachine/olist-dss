@@ -4,7 +4,7 @@
 > - Nếu code và file này mâu thuẫn → hỏi lại nhóm, đừng tự đoán.
 > - Khi một quyết định thiết kế thay đổi, cập nhật file này (mục 14 Changelog) trong cùng commit.
 > - Phạm vi bài toán: `docs/refactor_plan.md`. Cách làm lại phần nghiệp vụ: `docs/rebuild_guide.md`.
->   Quyết định nghiệp vụ đã chốt: `docs/business_rules.md` (tạo khi chốt rule đầu tiên).
+>   Quyết định nghiệp vụ đã chốt: `docs/business_rules.md`. KPI: `docs/kpi_dictionary.md`. Phân công: `docs/PROJECT_PLAN.md`.
 
 **Trạng thái 2026-11-07.** Hạ tầng (môi trường, ingestion, raw, metadata, orchestration) đã chạy. Toàn bộ phần
 nghiệp vụ (staging, warehouse, KPI, bi, ML, Power BI) **đang làm lại** theo `docs/rebuild_guide.md`; các mục
@@ -111,14 +111,15 @@ olist-dss/
 │   ├── PROJECT_PLAN.md           # phân công theo 3 bài toán
 │   ├── refactor_plan.md          # phạm vi & thiết kế đích (3 bài toán)
 │   ├── rebuild_guide.md          # cách làm lại phần nghiệp vụ từng bước
-│   ├── business_rules.md         # (tạo khi chốt rule đầu tiên) sổ quyết định nghiệp vụ BR-*
+│   ├── business_rules.md         # sổ quyết định nghiệp vụ BR-* (mỗi phần 1 mục, owner sửa)
+│   ├── kpi_dictionary.md         # định nghĩa KPI (mục Chung / P1 / P2 / P3)
 │   ├── SETUP.md, AZURE_SETUP.md  # cài đặt
 │   ├── profiling.md, profiling.sql  # đặc điểm dữ liệu raw
 │   └── report/, figures/
 ├── docker-compose.yml
 ├── docker/
 │   ├── airflow/Dockerfile        # apache/airflow + requirements + venv riêng cho dbt
-│   └── postgres/init/            # 00_databases.sql, 01_schemas.sql, 02_meta.sql (03_ml.sql thêm khi làm ML)
+│   └── postgres/init/            # 00_databases.sql, 01_schemas.sql, 02_meta.sql (03_ml_*.sql thêm khi làm ML)
 ├── .env.example, Makefile, pyproject.toml, uv.lock, requirements*.txt
 ├── data/
 │   ├── raw/ecom_dataset/         # 9 CSV nguồn, COMMIT
@@ -242,7 +243,7 @@ Thiết kế đích (bus matrix, grain, fact mới): `docs/refactor_plan.md` m�
   incremental.
 - **Tỷ lệ không lưu dạng %**: mọi ratio lưu dưới dạng tử số + mẫu số cộng được.
 - **Tiền tệ / thời gian**: giữ BRL; timestamp giữ nguyên, không đổi timezone.
-- Mọi model có YAML: description cho model và từng cột, test key (unique / not_null), relationships cho FK.
+- Mọi model có **file YAML riêng** đặt cạnh file SQL (`stg_orders.sql` + `stg_orders.yml`): description cho model và từng cột, test key (unique / not_null), relationships cho FK.
 
 Các quy ước khác (unknown member, date key, primary seller, SCD…) ghi vào đây khi chốt trong `docs/business_rules.md`.
 
@@ -250,7 +251,7 @@ Các quy ước khác (unknown member, date key, primary seller, SCD…) ghi và
 
 ## 8. KPI dictionary — đang làm lại
 
-Danh sách KPI đích: `docs/refactor_plan.md` mục 5. Viết lại `docs/kpi_dictionary.md` (định nghĩa, công thức tử /
+Danh sách KPI đích: `docs/refactor_plan.md` mục 5. Điền `docs/kpi_dictionary.md` (định nghĩa, công thức tử /
 mẫu, fact nguồn, rule liên quan) **trước** khi làm view `bi` và DAX measure. Mọi measure Power BI và mọi số trong
 báo cáo dùng đúng định nghĩa đó.
 
@@ -301,7 +302,7 @@ Module theo bài toán: `docs/refactor_plan.md` mục 6. Quy tắc chung:
 
 - Đọc từ `dw` / `bi`, ghi vào `ml`, **append** kèm `model_run_id` (uuid) và `model_version`; đăng ký vào
   `meta.model_registry` với metrics (`ml/common/registry.py`).
-- DDL bảng `ml.*` đặt ở `docker/postgres/init/03_ml.sql` (tạo khi làm ML) và khai báo source `ml` trong dbt.
+- DDL bảng `ml.*`: mỗi bài toán 1 file `docker/postgres/init/03_ml_p1.sql` / `_p2` / `_p3`, bảng dùng chung ở `03_ml_shared.sql`; dbt khai báo source riêng `ml_p1`, `ml_p2`, `ml_p3` (cùng schema `ml`). Thêm file mới vào vòng lặp `reset-db` trong Makefile.
 - Split theo thời gian (`ml/common/features.py`), không random split. Feature chỉ dùng thông tin có tại thời điểm
   ra quyết định. Mỗi model có baseline đơn giản để so.
 
