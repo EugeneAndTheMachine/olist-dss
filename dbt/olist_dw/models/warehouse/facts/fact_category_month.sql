@@ -37,6 +37,10 @@ order_category as (
     group by order_id, category_key, customer_state_code, month_date_key
 ),
 
+fulfillment as (
+    select order_id, is_delivered, is_late from {{ ref('fact_order_fulfillment') }}
+),
+
 latest_review as (
     select order_id, review_count, score_sum, is_low_score
     from {{ ref('fact_review') }}
@@ -63,9 +67,12 @@ select
     coalesce(sum(r.score_sum), 0) as score_sum,
     coalesce(sum(r.is_low_score), 0) as low_score_count,
     sum(oc.weight_g_sum) as weight_g_sum,
-    sum(oc.weight_g_items) as weight_g_items
+    sum(oc.weight_g_items) as weight_g_items,
+    coalesce(sum(ff.is_delivered), 0) as delivered_orders,
+    coalesce(sum(ff.is_late), 0) as late_orders
 from order_category as oc
 left join latest_review as r on r.order_id = oc.order_id
+left join fulfillment as ff on ff.order_id = oc.order_id
 join sellers as s
     on s.category_key = oc.category_key
     and s.customer_state_code = oc.customer_state_code

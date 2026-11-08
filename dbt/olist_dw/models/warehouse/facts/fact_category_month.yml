@@ -42,3 +42,7 @@ models:
         description: "Σ cân nặng item có cân nặng."
       - name: weight_g_items
         description: "Số item có cân nặng; cân nặng TB = weight_g_sum / weight_g_items."
+      - name: delivered_orders
+        description: "Cặp (đơn, category) có đơn đã giao (fact_order_fulfillment.is_delivered)."
+      - name: late_orders
+        description: "Cặp (đơn, category) có đơn giao trễ; late rate = Σ late_orders / Σ delivered_orders (BR-K2)."
