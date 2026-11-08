@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: dim_product
+    description: "1 dòng = 1 product_id + member -1 (Type 1). category_key trỏ tới dim_category (snowflake, BR-CW5-1)."
+    columns:
+      - name: product_key
+        description: "Surrogate key int_sk(product_id); -1 = product không tìm thấy."
+        data_tests: [unique, not_null]
+      - name: product_id
+        description: "Mã sản phẩm."
+        data_tests: [unique, not_null]
+      - name: category_key
+        description: "FK tới dim_category."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_category')
+              field: category_key
+      - name: name_length
+        description: "Số ký tự tên sản phẩm."
+      - name: description_length
+        description: "Số ký tự mô tả."
+      - name: photos_qty
+        description: "Số ảnh."
+      - name: weight_g
+        description: "Cân nặng (g)."
+      - name: length_cm
+        description: "Chiều dài (cm)."
+      - name: height_cm
+        description: "Chiều cao (cm)."
+      - name: width_cm
+        description: "Chiều rộng (cm)."
+      - name: volume_cm3
+        description: "Thể tích (cm³)."
+      - name: weight_band
+        description: "Band cân nặng (BR-CW5-2)."
+        data_tests:
+          - accepted_values:
+              values: ['< 0.5 kg', '0.5–2 kg', '2–5 kg', '5–10 kg', '>= 10 kg', 'Unknown']
+      - name: size_band
+        description: "Band thể tích (BR-CW5-2)."
+        data_tests:
+          - accepted_values:
+              values: ['< 1 L', '1–10 L', '10–50 L', '>= 50 L', 'Unknown']
