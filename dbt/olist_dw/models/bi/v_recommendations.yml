@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: v_recommendations
+    description: "Power BI: đề xuất của lần chạy ml/recommendations.py mới nhất (meta.model_registry, model_name = 'recommendations')."
+    columns:
+      - name: rec_id
+        description: "<decision_maker>|<subject_id>|<action>|<phiên bản model nguồn>; ổn định qua các lần chạy cùng phiên bản."
+        data_tests: [unique, not_null]
+      - name: decision_maker
+        description: "Người ra quyết định: logistics (P1), expansion (P2), category (P3)."
+        data_tests: [not_null]
+      - name: subject_type
+        description: "Loại đối tượng (category, …)."
+      - name: subject_id
+        description: "Mã đối tượng; P3 là category_pt, nối v_dim_category."
+      - name: action
+        description: "Hành động đề xuất."
+      - name: rationale
+        description: "Lý do ngắn (class, cờ)."
+      - name: score
+        description: "Điểm ưu tiên của bài toán nguồn."
+      - name: status
+        description: "proposed (mặc định)."
+      - name: created_at
+        description: "Thời điểm ghi đề xuất."
+      - name: model_version
+        description: "Phiên bản ml/recommendations.py."
+      - name: model_run_id
+        description: "Run của ml/recommendations.py."
