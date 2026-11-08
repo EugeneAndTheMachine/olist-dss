@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: v_fact_category_month
+    description: "Power BI trang 6–7: fact_category_month (category × bang khách × tháng). Tỷ lệ tính Σ tử / Σ mẫu trong DAX, không lấy trung bình của tỷ lệ."
+    columns:
+      - name: category_key
+        description: "Nối v_dim_category."
+      - name: customer_state_code
+        description: "Nối v_dim_state."
+      - name: month_date_key
+        description: "Nối v_dim_date (ngày đầu tháng)."
+      - name: month_date
+        description: "Ngày đầu tháng (kiểu date)."
+      - name: orders
+        description: "Số cặp (đơn, category); không cộng qua category."
+      - name: gmv
+        description: "GMV (Σ item_price)."
+      - name: customers
+        description: "Khách distinct trong ô; không cộng."
+      - name: sellers_active
+        description: "Seller distinct trong ô; không cộng."
+      - name: late_orders
+        description: "Late rate = Σ late_orders / Σ delivered_orders."
