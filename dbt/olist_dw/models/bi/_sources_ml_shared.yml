@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: ml_shared
+    description: "Bảng ml dùng chung (DDL: docker/postgres/init/03_ml_shared.sql, áp bằng make db-init)."
+    schema: ml
+    tables:
+      - name: recommendations
+        description: "Đề xuất cho người ra quyết định; chỉ ml/recommendations.py ghi (C-M2), append-only theo model_run_id."

@@ -2,7 +2,7 @@
 
 download_kaggle → upload_to_lake → load_raw
   → dbt_deps → dbt_seed → dbt_build
-  → (ML: thêm lại theo docs/rebuild_guide.md)
+  → ml_p* → ml_recommendations
   → meta_publish → dbt_docs_generate
 
 Repo được mount vào /opt/olist (docker-compose.yml). Kết nối lấy từ env, không hardcode.
@@ -93,10 +93,11 @@ with DAG(
     dbt_seed = task("dbt_seed", f"{DBT_PROFILE}; {DBT} seed")
     dbt_build = task("dbt_build", f"{DBT_PROFILE}; {DBT} build")
 
-    # Task ML thêm lại khi có module (docs/rebuild_guide.md, bước 5)
+    # Mỗi bài toán thêm 1 task ml_p1 / ml_p2 / ml_p3 giữa dbt_build và ml_recommendations
+    ml_recommendations = task("ml_recommendations", "python -m ml.recommendations")
 
     meta_publish = task("meta_publish", "python -m ingestion.meta_publish")
     dbt_docs_generate = task("dbt_docs_generate", f"{DBT_PROFILE}; {DBT} docs generate")
 
     extract >> upload_to_lake >> load_raw >> dbt_deps >> dbt_seed >> dbt_build
-    dbt_build >> meta_publish >> dbt_docs_generate
+    dbt_build >> ml_recommendations >> meta_publish >> dbt_docs_generate
