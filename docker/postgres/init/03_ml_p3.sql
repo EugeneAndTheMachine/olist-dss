@@ -12,6 +12,7 @@ create table if not exists ml.category_forecast (
     yhat_upper     numeric,
     model_name     text not null,
     is_backtest    smallint not null,
+    is_sparse      smallint not null,
     actual         numeric,
     model_run_id   uuid not null,
     model_version  text not null

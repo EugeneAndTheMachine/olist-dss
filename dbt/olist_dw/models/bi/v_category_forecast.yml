@@ -2,13 +2,15 @@ version: 2
 
 models:
   - name: v_category_forecast
-    description: "Power BI trang 7: dự báo GMV của lần chạy p3_category_forecast mới nhất. is_backtest = 1 là dự báo 2018-06..08 từ train đến 2018-05, có actual để so."
+    description: "Power BI trang 7: dự báo GMV của run forecast mà run p3_category_portfolio mới nhất đã dùng (forecast_model_run_id). is_backtest = 1 là dự báo 2018-06..08 từ train đến 2018-05, có actual để so."
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [month, category_level, category_code, metric, is_backtest]
     columns:
       - name: month_date_key
         description: "Nối v_dim_date (ngày đầu tháng)."
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
       - name: category_level
         description: "category hoặc group."
         data_tests:
@@ -22,10 +24,12 @@ models:
       - name: yhat
         description: "GMV dự báo."
       - name: yhat_lower
-        description: "Cận dưới khoảng 80% (quantile 10% của actual / yhat ở rolling-origin)."
+        description: "Cận dưới khoảng danh nghĩa 80% (quantile 10% của actual / yhat ở rolling-origin); độ phủ đo trên test ghi ở meta.model_registry."
       - name: yhat_upper
-        description: "Cận trên khoảng 80%."
+        description: "Cận trên khoảng danh nghĩa 80%."
       - name: actual
         description: "GMV thực, chỉ có ở dòng backtest."
+      - name: is_sparse
+        description: "1 khi nhóm có tháng train < 10 đơn (BR-P3-7); dự báo bằng baseline."
       - name: model_name
         description: "Model dùng cho level (baseline khi model chọn bằng validation không thắng baseline trên test)."

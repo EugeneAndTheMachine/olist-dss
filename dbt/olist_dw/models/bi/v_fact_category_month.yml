@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: v_fact_category_month
-    description: "Power BI trang 6–7: fact_category_month (category × bang khách × tháng). Tỷ lệ tính Σ tử / Σ mẫu trong DAX, không lấy trung bình của tỷ lệ."
+    description: "Power BI trang 6–7: fact_category_month (category × bang khách × tháng) trong cửa sổ phân tích (var analysis_start..analysis_end, mặc định 2017-01..2018-08). Tỷ lệ tính Σ tử / Σ mẫu trong DAX, không lấy trung bình của tỷ lệ."
     columns:
       - name: category_key
         description: "Nối v_dim_category."
@@ -10,6 +10,8 @@ models:
         description: "Nối v_dim_state."
       - name: month_date_key
         description: "Nối v_dim_date (ngày đầu tháng)."
+        data_tests:
+          - relationships: {to: ref('dim_date'), field: date_key}
       - name: month_date
         description: "Ngày đầu tháng (kiểu date)."
       - name: orders

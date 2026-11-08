@@ -1,10 +1,9 @@
 """ML-3a — dự báo GMV 3 tháng cho category đủ dày và cho nhóm category (BR-P3-7).
 
-Chọn model không nhìn tập test: rolling-origin trong train (origin 2017-12, 2018-01, 2018-02, horizon 3,
-mọi cửa sổ dự báo ≤ 2018-05), một model cho mỗi level theo sMAPE validation trung bình.
-Test 2018-06..08 chấm model đã chọn và từng baseline một lần; nếu model chọn không thắng baseline tốt nhất theo
-validation thì level đó dùng baseline ấy cho dự báo (quy tắc định trước, không chọn lại theo test).
-Khoảng 80% = quantile 10/90 của tỷ số actual / yhat trong rolling-origin, theo bước dự báo.
+Model mỗi level chọn bằng rolling-origin trong train (origin 2017-12, 2018-01, 2018-02, horizon 3, mọi tháng dự báo
+≤ 2018-05). Test 2018-06..08 chấm model chọn và từng baseline một lần. Quy tắc định trước (phase 5): model chọn không
+thắng baseline tốt nhất theo validation trên test thì level đó dự báo bằng baseline ấy; khi đó sMAPE test của model
+đang dùng không còn là holdout sạch. Khoảng = quantile 10/90 của actual / yhat trong rolling-origin, theo bước.
 """
 from __future__ import annotations
 
@@ -79,22 +78,31 @@ def select_models(series: list[dict]) -> tuple[dict[str, str], pd.DataFrame, pd.
     return chosen, by_level, val
 
 
-def interval_ratios(val: pd.DataFrame, chosen: dict[str, str]) -> pd.DataFrame:
-    v = val[val.apply(lambda r: r["model"] == chosen[r["category_level"]], axis=1)]
-    v = v[v["yhat"] > 0].assign(ratio=lambda d: d["y"] / d["yhat"])
+def interval_ratios(val: pd.DataFrame, model: str) -> pd.DataFrame:
+    v = val[(val["model"] == model) & (val["yhat"] > 0)].assign(ratio=lambda d: d["y"] / d["yhat"])
     return v.groupby(["category_level", "step"])["ratio"].quantile([0.1, 0.9]).unstack()
 
 
-def model_for(s: dict, chosen: dict[str, str]) -> str:
-    model = chosen[s["category_level"]]
+def model_for(s: dict, level_models: dict[str, str], best_baseline: dict[str, str]) -> str:
+    """Chuỗi thưa (có tháng train < 10 đơn) không dùng model có trend; dùng baseline tốt nhất theo validation."""
+    model = level_models[s["category_level"]]
     if s["sparse"] and model not in BASELINES:
-        return "seasonal_naive"
+        return best_baseline[s["category_level"]]
     return model
 
 
-def forecast_rows(s: dict, model: str, history: pd.Series, months: pd.DatetimeIndex, ratios: pd.DataFrame,
-                  is_backtest: int, actual: pd.Series | None) -> list[dict]:
-    yhat = fit_predict(history, len(months), model)
+def safe_predict(history: pd.Series, horizon: int, model: str, fallback: str, code: str) -> tuple[np.ndarray, str]:
+    try:
+        return fit_predict(history, horizon, model), model
+    except Exception:
+        logger.warning("%s: %s lỗi, dùng %s", code, model, fallback, exc_info=True)
+        return fit_predict(history, horizon, fallback), fallback
+
+
+def forecast_rows(s: dict, history: pd.Series, months: pd.DatetimeIndex, model: str, fallback: str,
+                  ratios_by_model: dict[str, pd.DataFrame], is_backtest: int) -> list[dict]:
+    yhat, used = safe_predict(history, len(months), model, fallback, s["category_code"])
+    ratios = ratios_by_model[used]
     out = []
     for step, (month, value) in enumerate(zip(months, yhat), start=1):
         q = ratios.loc[(s["category_level"], step)] if (s["category_level"], step) in ratios.index else None
@@ -104,33 +112,31 @@ def forecast_rows(s: dict, model: str, history: pd.Series, months: pd.DatetimeIn
             "yhat": float(value),
             "yhat_lower": float(value * q[0.1]) if q is not None else None,
             "yhat_upper": float(value * q[0.9]) if q is not None else None,
-            "model_name": model, "is_backtest": is_backtest,
-            "actual": float(actual.loc[month]) if actual is not None else None,
+            "model_name": used, "is_backtest": is_backtest, "is_sparse": int(s["sparse"]),
+            "actual": float(s["y"].loc[month]) if is_backtest else None,
         })
     return out
 
 
-def test_scores(series: list[dict], chosen: dict[str, str], val: pd.DataFrame) -> pd.DataFrame:
-    """sMAPE / MAPE / độ phủ khoảng 80% trên 2018-06..08 cho model đã chọn và từng baseline (chấm một lần)."""
-    levels = list(chosen)
-    ratios_by_model = {m: interval_ratios(val, {lvl: m for lvl in levels}) for m in MODELS}
+def test_scores(series: list[dict], chosen: dict[str, str], best_baseline: dict[str, str],
+                ratios_by_model: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """sMAPE / MAPE / độ phủ khoảng trên 2018-06..08 cho model chọn và từng baseline (chấm một lần)."""
     rows = []
     for s in series:
         train, test = s["y"][s["y"].index <= TRAIN_END], s["y"][s["y"].index > TRAIN_END]
-        for model in sorted(set(BASELINES) | {model_for(s, chosen)}):
-            yhat = fit_predict(train, len(test), model)
-            ratios = ratios_by_model[model]
-            q = [ratios.loc[(s["category_level"], h)] for h in range(1, len(test) + 1)]
-            inside = [lo * v <= y <= hi * v for (lo, hi), v, y in zip(((r[0.1], r[0.9]) for r in q), yhat, test)]
+        picked = model_for(s, chosen, best_baseline)
+        for model in sorted(set(BASELINES) | {picked}):
+            yhat, used = safe_predict(train, len(test), model, best_baseline[s["category_level"]], s["category_code"])
+            ratios = ratios_by_model[used]
+            bands = [ratios.loc[(s["category_level"], h)] for h in range(1, len(test) + 1)]
+            inside = [b[0.1] * v <= y <= b[0.9] * v for b, v, y in zip(bands, yhat, test)]
             rows.append({"category_level": s["category_level"], "category_code": s["category_code"], "model": model,
-                         "is_chosen": model == model_for(s, chosen), "smape": smape(test, yhat), "mape": mape(test, yhat),
+                         "is_chosen": model == picked, "smape": smape(test, yhat), "mape": mape(test, yhat),
                          "coverage": float(np.mean(inside))})
     return pd.DataFrame(rows)
 
 
-def production_models(chosen: dict[str, str], by_level: pd.DataFrame, scores: pd.DataFrame) -> tuple[dict, dict]:
-    """Giữ model chọn nếu sMAPE trung vị test < baseline tốt nhất theo validation; ngược lại dùng baseline đó."""
-    best_baseline = by_level[list(BASELINES)].idxmin(axis=1).to_dict()
+def production_models(chosen: dict[str, str], best_baseline: dict[str, str], scores: pd.DataFrame) -> tuple[dict, dict]:
     med = scores.groupby(["category_level", "model"])["smape"].median()
     beats = {lvl: bool(med[(lvl, m)] < med[(lvl, best_baseline[lvl])]) if m not in BASELINES else True
              for lvl, m in chosen.items()}
@@ -141,36 +147,40 @@ def production_models(chosen: dict[str, str], by_level: pd.DataFrame, scores: pd
 def run(monthly: pd.DataFrame) -> ModelRun:
     series = build_series(monthly)
     chosen, by_level, val = select_models(series)
-    scores = test_scores(series, chosen, val)
-    used, decision = production_models(chosen, by_level, scores)
-    ratios = interval_ratios(val, used)
+    best_baseline = by_level[list(BASELINES)].idxmin(axis=1).to_dict()
+    ratios_by_model = {m: interval_ratios(val, m) for m in MODELS}
+    scores = test_scores(series, chosen, best_baseline, ratios_by_model)
+    used, decision = production_models(chosen, best_baseline, scores)
 
     test_months = pd.date_range("2018-06-01", TEST_END, freq="MS")
     future = pd.date_range("2018-09-01", periods=HORIZON, freq="MS")
     rows = []
     for s in series:
-        model = model_for(s, used)
-        rows += forecast_rows(s, model, s["y"][s["y"].index <= TRAIN_END], test_months, ratios, 1, s["y"])
-        rows += forecast_rows(s, model, s["y"], future, ratios, 0, None)
-
-    run_ = new_run(MODEL_NAME, MODEL_VERSION)
-    append_df(tag_output(pd.DataFrame(rows), run_), "category_forecast")
+        model, fallback = model_for(s, used, best_baseline), best_baseline[s["category_level"]]
+        rows += forecast_rows(s, s["y"][s["y"].index <= TRAIN_END], test_months, model, fallback, ratios_by_model, 1)
+        rows += forecast_rows(s, s["y"], future, model, fallback, ratios_by_model, 0)
+    out = pd.DataFrame(rows)
 
     test_median = scores.groupby(["category_level", "model"])[["smape", "mape", "coverage"]].median()
+    metrics = {
+        "n_series": {lvl: int(sum(s["category_level"] == lvl for s in series)) for lvl in ("category", "group")},
+        "n_sparse_series": int(sum(s["sparse"] for s in series)),
+        "validation_smape_mean": by_level.round(4).to_dict(orient="index"),
+        "test_smape_median": test_median["smape"].unstack().round(4).to_dict(orient="index"),
+        "test_mape_median": test_median["mape"].unstack().round(4).to_dict(orient="index"),
+        "test_interval_coverage_median": test_median["coverage"].unstack().round(4).to_dict(orient="index"),
+        "rows_by_model": out[out["is_backtest"] == 0]["model_name"].value_counts().to_dict(),
+        **decision,
+    }
+    run_ = new_run(MODEL_NAME, MODEL_VERSION)
+    append_df(tag_output(out, run_), "category_forecast")
     register(
         run_,
         train_window=f"{TRAIN_START}..{TRAIN_END} (test 2018-06..08)",
         params={"origins": ORIGINS, "horizon": HORIZON, "models": list(MODELS), "min_monthly_orders": MIN_MONTHLY_ORDERS,
                 "selected_by_validation": chosen, "model_used_by_level": used,
-                "interval": "quantile 10/90 of actual/yhat in rolling-origin"},
-        metrics={
-            "n_series": {lvl: int(sum(s["category_level"] == lvl for s in series)) for lvl in ("category", "group")},
-            "validation_smape_mean": by_level.round(4).to_dict(orient="index"),
-            "test_smape_median": test_median["smape"].unstack().round(4).to_dict(orient="index"),
-            "test_mape_median": test_median["mape"].unstack().round(4).to_dict(orient="index"),
-            "test_interval80_coverage_median": test_median["coverage"].unstack().round(4).to_dict(orient="index"),
-            **decision,
-        },
+                "interval": "nominal 80%: quantile 10/90 of actual/yhat in rolling-origin"},
+        metrics=metrics,
     )
     logger.info("%s: %d series, chọn %s, dùng %s, run %s", MODEL_NAME, len(series), chosen, used, run_.model_run_id)
     return run_

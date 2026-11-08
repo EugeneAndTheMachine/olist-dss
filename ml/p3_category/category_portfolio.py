@@ -54,14 +54,16 @@ def classify(f: pd.DataFrame, pareto_share: float, growth_band: float) -> pd.Ser
 
 
 def flags(f: pd.DataFrame, platform: dict[str, float], p: dict) -> pd.DataFrame:
+    """Chỉ gắn cờ cho category được xếp loại (BR-P3-11: Unknown và low volume không có cờ)."""
+    r = rankable(f)
     quality = (
         (f["avg_score"] < platform["avg_score"] - p["score_gap"])
         | (f["low_score_rate"] > platform["low_score_rate"] + p["low_score_gap"])
         | (f["late_rate"] > platform["late_rate"] + p["late_gap"])
     )
     return pd.DataFrame({
-        "quality_flag": (quality & (f["low_volume_flag"] == 0)).astype(int),
-        "recruit_sellers_flag": ((f["hhi"] >= p["hhi_recruit"]) & (f["low_volume_flag"] == 0)).astype(int),
+        "quality_flag": (quality & r).astype(int),
+        "recruit_sellers_flag": ((f["hhi"] >= p["hhi_recruit"]) & r).astype(int),
     }, index=f.index)
 
 
@@ -86,7 +88,7 @@ def score(comp: pd.DataFrame, weights: dict[str, float]) -> pd.Series:
 
 
 def action(cls: pd.Series, fl: pd.DataFrame) -> pd.Series:
-    """Cùng luật với measure DAX P3 Action: cờ quality trước, rồi tuyển seller cho nhóm tăng, rồi theo class."""
+    """Cùng luật với measure P3 Action (powerbi/work/p3_measures.dax): cờ quality trước, rồi tuyển seller cho nhóm tăng, rồi theo class."""
     act = cls.map(ACTION_BY_CLASS)
     grow_like = cls.isin(["Grow", "Invest selectively"])
     act = act.mask(grow_like & (fl["recruit_sellers_flag"] == 1), "Recruit sellers")
@@ -114,7 +116,7 @@ def forecast_growth(forecast_run_id: str) -> tuple[pd.Series, float]:
         """
     )
     cat = fc[fc["category_level"] == "category"].set_index("category_key")["yhat"]
-    growth = cat / base.set_index("category_key")["gmv"].reindex(cat.index) - 1
+    growth = (cat / base.set_index("category_key")["gmv"].reindex(cat.index) - 1).replace([np.inf, -np.inf], np.nan)
     groups = fc[fc["category_level"] == "group"]["yhat"].sum()
     platform = groups / base[base["category_group"] != "Unknown"]["gmv"].sum() - 1
     return growth, float(platform)
@@ -153,7 +155,7 @@ def run(monthly: pd.DataFrame, seller_gmv: pd.DataFrame, forecast_run_id: str) -
     f = category_features(AS_OF, monthly, seller_gmv)
     fg, platform_fg = forecast_growth(forecast_run_id)
     f["forecast_growth"] = fg.reindex(f.index)
-    f["relative_forecast_growth"] = (1 + f["forecast_growth"]) / (1 + platform_fg) - 1
+    f["relative_forecast_growth"] = ((1 + f["forecast_growth"]) / (1 + platform_fg) - 1).replace([np.inf, -np.inf], np.nan)
 
     platform = platform_rates(monthly, AS_OF)
     cls = classify(f, PARAMS["pareto_share"], PARAMS["growth_band"])
@@ -187,24 +189,25 @@ def run(monthly: pd.DataFrame, seller_gmv: pd.DataFrame, forecast_run_id: str) -
         "forecast_model_run_id": forecast_run_id,
     })
 
+    ranked = out[out["portfolio_class"].notna()]
+    metrics = {
+        "n_ranked": int(len(ranked)),
+        "n_by_class": ranked["portfolio_class"].value_counts().to_dict(),
+        "n_growth_null_ranked": int(ranked["relative_growth"].isna().sum()),
+        "n_quality_flag": int(ranked["quality_flag"].sum()),
+        "n_recruit_sellers_flag": int(ranked["recruit_sellers_flag"].sum()),
+        "class_changes_under_threshold_shifts": stability(f),
+        "backtest": backtest(monthly, seller_gmv),
+    }
     run_ = new_run(MODEL_NAME, MODEL_VERSION)
     append_df(tag_output(out.reset_index(drop=True), run_), "category_opportunity")
-    ranked = out[out["portfolio_class"].notna()]
     register(
         run_,
         train_window=f"features as of {AS_OF} (12m + 3m vs same 3m last year)",
         params={**PARAMS, "forecast_model_run_id": forecast_run_id, "platform_forecast_growth": round(platform_fg, 4),
                 "platform_growth": round(f.attrs["platform_growth"], 4), "platform_rates": platform,
                 "growth_null_counts_as_stable": True},
-        metrics={
-            "n_ranked": int(len(ranked)),
-            "n_by_class": ranked["portfolio_class"].value_counts().to_dict(),
-            "n_growth_null_ranked": int(ranked["relative_growth"].isna().sum()),
-            "n_quality_flag": int(ranked["quality_flag"].sum()),
-            "n_recruit_sellers_flag": int(ranked["recruit_sellers_flag"].sum()),
-            "class_changes_under_threshold_shifts": stability(f),
-            "backtest": backtest(monthly, seller_gmv),
-        },
+        metrics=metrics,
     )
     logger.info("%s: %d category xếp loại, run %s", MODEL_NAME, len(ranked), run_.model_run_id)
     return run_

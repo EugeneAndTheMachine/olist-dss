@@ -113,7 +113,6 @@ def category_features(as_of: str, monthly: pd.DataFrame, seller_gmv: pd.DataFram
     f["freight_ratio"] = _ratio(f["freight"], f["gmv_12m"])
     f["hhi"] = hhi(seller_gmv, w["w12"]).reindex(f.index)
     f["low_volume_flag"] = (f["delivered_12m"] < MIN_DELIVERED_12M).astype(int)
-    f["growth_low_volume"] = (~enough).astype(int)
     f.attrs["platform_growth"] = float(g_platform)
     return f.replace([np.inf, -np.inf], np.nan)
 

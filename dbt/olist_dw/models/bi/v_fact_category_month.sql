@@ -17,4 +17,4 @@ select
     weight_g_sum,
     weight_g_items
 from {{ ref('fact_category_month') }}
-where month_date_key <> -1
+where month_date_key between {{ var('analysis_start') | replace('-', '') }} and {{ var('analysis_end') | replace('-', '') }}
