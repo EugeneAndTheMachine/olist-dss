@@ -1,0 +1,224 @@
+// P3 — Category Performance (trang 6) và Category Opportunities (trang 7).
+// Định nghĩa KPI: docs/kpi_dictionary.md (mục P3). Measure chung (GMV, Orders, ...) lấy từ model C-B2, không tạo lại.
+// Mọi measure đặt trong bảng _Measures. Tỷ lệ = Σ tử / Σ mẫu, không lấy trung bình của tỷ lệ.
+//
+// Bảng (Import, schema bi, user powerbi_reader):
+//   v_fact_category_month, v_dim_category, v_dim_state, v_dim_date, v_fact_sales,
+//   v_category_forecast, v_category_opportunity, v_recommendations
+// Relationship (một chiều, dim → fact):
+//   v_fact_category_month[category_key]        → v_dim_category[category_key]
+//   v_fact_category_month[month_date_key]      → v_dim_date[date_key]
+//   v_fact_category_month[customer_state_code] → v_dim_state[state_code]
+//   v_category_opportunity[category_key]       → v_dim_category[category_key]
+//   v_category_forecast[category_key]          → v_dim_category[category_key]   (dòng cấp nhóm có key -1)
+//   v_category_forecast[month_date_key]        → v_dim_date[date_key]
+//   v_recommendations[subject_id]              → v_dim_category[category_pt]    (lọc decision_maker = "category")
+// Cột giả định của v_dim_date (C-W1): date_key, date_day (mark as date table), month_start.
+
+
+// ---------- What-if parameter (Modeling → New parameter → Numeric range) ----------
+// Tạo bằng giao diện; mỗi parameter sinh bảng 1 cột + measure "... Value". Mặc định = cấu hình ML (BR-P3-8, BR-P3-10).
+//   P3 Top N          5 .. 30, bước 1,     mặc định 10
+//   P3 Pareto Share   0.70 .. 0.90, 0.01,  mặc định 0.80
+//   P3 Growth Band    0.00 .. 0.10, 0.01,  mặc định 0.05
+//   P3 W Size         0 .. 1, 0.05,        mặc định 0.25
+//   P3 W Growth       0 .. 1, 0.05,        mặc định 0.25
+//   P3 W Forecast     0 .. 1, 0.05,        mặc định 0.10
+//   P3 W Satisfaction 0 .. 1, 0.05,        mặc định 0.15
+//   P3 W Ontime       0 .. 1, 0.05,        mặc định 0.15
+//   P3 W Freight      0 .. 1, 0.05,        mặc định 0.10
+// Field parameter (Modeling → New parameter → Fields): "P3 Metric" gồm [P3 GMV], [P3 Orders], [P3 Items].
+
+
+// ---------- Trang 6: hiệu quả category ----------
+
+P3 GMV = SUM ( v_fact_category_month[gmv] )
+
+P3 Orders = SUM ( v_fact_category_month[orders] )
+
+P3 Items = SUM ( v_fact_category_month[items] )
+
+P3 GMV Share =
+DIVIDE ( [P3 GMV], CALCULATE ( [P3 GMV], ALL ( v_dim_category ) ) )
+
+P3 AOV = DIVIDE ( [P3 GMV], [P3 Orders] )
+
+P3 Avg Score =
+DIVIDE ( SUM ( v_fact_category_month[score_sum] ), SUM ( v_fact_category_month[review_count] ) )
+
+P3 Low Score Rate =
+DIVIDE ( SUM ( v_fact_category_month[low_score_count] ), SUM ( v_fact_category_month[review_count] ) )
+
+// BR-P3-5: ẩn khi < 100 đơn delivered để tránh tỷ lệ nhiễu.
+P3 Late Rate =
+VAR delivered = SUM ( v_fact_category_month[delivered_orders] )
+RETURN IF ( delivered >= 100, DIVIDE ( SUM ( v_fact_category_month[late_orders] ), delivered ) )
+
+P3 Freight Ratio = DIVIDE ( SUM ( v_fact_category_month[freight] ), [P3 GMV] )
+
+P3 Active Sellers =
+CALCULATE ( DISTINCTCOUNT ( v_fact_sales[seller_id] ), v_dim_order_status[counts_as_sale] = 1 )
+
+// Top-N theo metric đang chọn; dùng làm visual filter "P3 In Top N = 1" trên bar chart.
+P3 In Top N =
+VAR n = [P3 Top N Value]
+VAR rk =
+    RANKX ( ALLSELECTED ( v_dim_category[category_name] ), [P3 GMV], , DESC, SKIP )
+RETURN IF ( NOT ISBLANK ( [P3 GMV] ) && rk <= n, 1, 0 )
+
+// Pareto: % GMV tích luỹ theo thứ tự GMV giảm dần.
+P3 Cumulative GMV Share =
+VAR cur = [P3 GMV]
+VAR total = CALCULATE ( [P3 GMV], ALLSELECTED ( v_dim_category[category_name] ) )
+VAR above =
+    SUMX (
+        FILTER ( ALLSELECTED ( v_dim_category[category_name] ), [P3 GMV] >= cur ),
+        [P3 GMV]
+    )
+RETURN IF ( NOT ISBLANK ( cur ), DIVIDE ( above, total ) )
+
+// Thay đổi share (điểm %): 3 tháng cuối của khoảng đang chọn so với cùng 3 tháng năm trước.
+P3 Share Change =
+VAR last_day = MAX ( v_dim_date[date_day] )
+VAR w3 = DATESINPERIOD ( v_dim_date[date_day], last_day, -3, MONTH )
+VAR w3_ly = SAMEPERIODLASTYEAR ( w3 )
+VAR share_now = CALCULATE ( [P3 GMV Share], w3 )
+VAR share_ly = CALCULATE ( [P3 GMV Share], w3_ly )
+RETURN IF ( NOT ISBLANK ( share_now ) || NOT ISBLANK ( share_ly ), share_now - share_ly )
+
+// Heatmap tháng × nhóm: GMV tháng / GMV trung bình mỗi tháng trong năm của tháng đó.
+P3 Seasonality Index =
+VAR yr = YEAR ( MAX ( v_dim_date[date_day] ) )
+VAR avg_month =
+    CALCULATE (
+        AVERAGEX ( VALUES ( v_dim_date[month_start] ), [P3 GMV] ),
+        FILTER ( ALL ( v_dim_date ), YEAR ( v_dim_date[date_day] ) = yr )
+    )
+RETURN DIVIDE ( [P3 GMV], avg_month )
+
+
+// ---------- Chỉ số cửa sổ: đọc từ ML (toàn quốc, 12 tháng đến 2018-08), không tính lại ----------
+
+P3 Relative Growth = MAX ( v_category_opportunity[relative_growth] )
+
+P3 YoY Growth = MAX ( v_category_opportunity[yoy_growth] )
+
+P3 HHI = MAX ( v_category_opportunity[hhi] )
+
+P3 Forecast Growth = MAX ( v_category_opportunity[forecast_growth] )
+
+
+// ---------- Trang 7: xếp loại, điểm và hành động theo ngưỡng / trọng số đang chọn ----------
+// Ở giá trị mặc định, P3 Class / P3 Action / P3 Score phải trùng portfolio_class / recommended_action /
+// opportunity_score của ML (ml/p3_category/category_portfolio.py).
+
+P3 Is Ranked =
+IF ( NOT ISBLANK ( MAX ( v_category_opportunity[portfolio_class] ) ), 1, 0 )
+
+// Pareto: category thuộc nhóm đầu nếu GMV tích luỹ của các category lớn hơn nó (không gồm nó) < ngưỡng.
+P3 Is High Share =
+VAR cur = MAX ( v_category_opportunity[gmv_12m] )
+VAR ranked =
+    FILTER ( ALL ( v_category_opportunity ), NOT ISBLANK ( v_category_opportunity[portfolio_class] ) )
+VAR total = SUMX ( ranked, v_category_opportunity[gmv_12m] )
+VAR before = SUMX ( FILTER ( ranked, v_category_opportunity[gmv_12m] > cur ), v_category_opportunity[gmv_12m] )
+RETURN IF ( [P3 Is Ranked] = 1, IF ( DIVIDE ( before, total ) < [P3 Pareto Share Value], 1, 0 ) )
+
+// Growth null (thiếu đơn) coi là ổn định, không "tăng".
+P3 Is Growing =
+VAR g = MAX ( v_category_opportunity[relative_growth] )
+RETURN IF ( [P3 Is Ranked] = 1, IF ( NOT ISBLANK ( g ) && g > [P3 Growth Band Value], 1, 0 ) )
+
+P3 Class =
+IF (
+    [P3 Is Ranked] = 1,
+    SWITCH (
+        TRUE (),
+        [P3 Is High Share] = 1 && [P3 Is Growing] = 1, "Grow",
+        [P3 Is Growing] = 1, "Invest selectively",
+        [P3 Is High Share] = 1, "Maintain",
+        "Review"
+    )
+)
+
+P3 Action =
+VAR cls = [P3 Class]
+VAR quality = MAX ( v_category_opportunity[quality_flag] )
+VAR recruit = MAX ( v_category_opportunity[recruit_sellers_flag] )
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( cls ), BLANK (),
+        quality = 1, "Fix quality first",
+        cls IN { "Grow", "Invest selectively" } && recruit = 1, "Recruit sellers",
+        cls = "Grow", "Invest to grow",
+        cls = "Invest selectively", "Test and scale",
+        cls = "Maintain", "Maintain",
+        "Review / deprioritise"
+    )
+
+// Σ w·c / Σ w chỉ trên thành phần khác null: category thiếu growth / forecast không bị kéo về 0.
+P3 Opportunity Score =
+VAR c1 = MAX ( v_category_opportunity[c_size] )
+VAR c2 = MAX ( v_category_opportunity[c_growth] )
+VAR c3 = MAX ( v_category_opportunity[c_forecast] )
+VAR c4 = MAX ( v_category_opportunity[c_satisfaction] )
+VAR c5 = MAX ( v_category_opportunity[c_ontime] )
+VAR c6 = MAX ( v_category_opportunity[c_freight] )
+VAR w1 = [P3 W Size Value]
+VAR w2 = [P3 W Growth Value]
+VAR w3 = [P3 W Forecast Value]
+VAR w4 = [P3 W Satisfaction Value]
+VAR w5 = [P3 W Ontime Value]
+VAR w6 = [P3 W Freight Value]
+VAR num =
+    IF ( ISBLANK ( c1 ), 0, w1 * c1 ) + IF ( ISBLANK ( c2 ), 0, w2 * c2 ) + IF ( ISBLANK ( c3 ), 0, w3 * c3 )
+        + IF ( ISBLANK ( c4 ), 0, w4 * c4 ) + IF ( ISBLANK ( c5 ), 0, w5 * c5 ) + IF ( ISBLANK ( c6 ), 0, w6 * c6 )
+VAR den =
+    IF ( ISBLANK ( c1 ), 0, w1 ) + IF ( ISBLANK ( c2 ), 0, w2 ) + IF ( ISBLANK ( c3 ), 0, w3 )
+        + IF ( ISBLANK ( c4 ), 0, w4 ) + IF ( ISBLANK ( c5 ), 0, w5 ) + IF ( ISBLANK ( c6 ), 0, w6 )
+RETURN IF ( [P3 Is Ranked] = 1, DIVIDE ( num, den ) )
+
+P3 Rank =
+IF (
+    [P3 Is Ranked] = 1,
+    RANKX (
+        FILTER ( ALLSELECTED ( v_dim_category[category_name] ), [P3 Is Ranked] = 1 ),
+        [P3 Opportunity Score], , DESC, SKIP
+    )
+)
+
+// Kiểm tra thủ công ở cấu hình mặc định: phải = 0 trên toàn bảng ranking.
+P3 Check Class Matches ML =
+SUMX (
+    VALUES ( v_dim_category[category_name] ),
+    IF ( [P3 Is Ranked] = 1 && [P3 Class] <> MAX ( v_category_opportunity[portfolio_class] ), 1, 0 )
+)
+
+
+// ---------- Forecast ----------
+
+P3 Forecast GMV =
+CALCULATE ( SUM ( v_category_forecast[yhat] ), v_category_forecast[is_backtest] = 0 )
+
+P3 Forecast Lower =
+CALCULATE ( SUM ( v_category_forecast[yhat_lower] ), v_category_forecast[is_backtest] = 0 )
+
+P3 Forecast Upper =
+CALCULATE ( SUM ( v_category_forecast[yhat_upper] ), v_category_forecast[is_backtest] = 0 )
+
+P3 Backtest GMV =
+CALCULATE ( SUM ( v_category_forecast[yhat] ), v_category_forecast[is_backtest] = 1 )
+
+P3 Backtest Actual =
+CALCULATE ( SUM ( v_category_forecast[actual] ), v_category_forecast[is_backtest] = 1 )
+
+// Dòng cấp nhóm có category_key -1 nên không đi qua relationship; slicer nhóm của v_dim_category áp bằng TREATAS.
+P3 Group Forecast GMV =
+CALCULATE (
+    SUM ( v_category_forecast[yhat] ),
+    v_category_forecast[category_level] = "group",
+    v_category_forecast[is_backtest] = 0,
+    REMOVEFILTERS ( v_dim_category ),
+    TREATAS ( VALUES ( v_dim_category[category_group] ), v_category_forecast[category_group] )
+)
