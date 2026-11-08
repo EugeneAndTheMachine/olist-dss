@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: stg_order_reviews
+    description: "1 dòng = 1 cặp (review_id, order_id), dedup giữa các batch raw (BR-CS7-1). KPI review chỉ dùng is_latest_for_order = 1 (BR-CS7-2, BR-K3)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [review_id, order_id]
+    columns:
+      - name: review_id
+        description: "Mã review; một review_id có thể gắn nhiều đơn."
+        data_tests: [not_null]
+      - name: order_id
+        description: "Mã đơn được review."
+        data_tests: [not_null]
+      - name: review_score
+        description: "Điểm 1–5."
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+              quote: false
+      - name: review_comment_title
+        description: "Tiêu đề comment (đã trim, rỗng → null)."
+      - name: review_comment_message
+        description: "Nội dung comment (đã trim, rỗng hoặc chỉ khoảng trắng → null)."
+      - name: review_created_at
+        description: "Thời điểm Olist gửi khảo sát."
+      - name: review_answered_at
+        description: "Thời điểm khách trả lời."
+      - name: has_comment
+        description: "1 khi nội dung comment không rỗng sau trim (BR-CS7-3)."
+        data_tests:
+          - accepted_values:
+              values: [0, 1]
+              quote: false
+      - name: comment_length
+        description: "Số ký tự comment sau trim; 0 khi không có."
+      - name: is_latest_for_order
+        description: "1 cho review mới nhất của đơn: answer mới nhất → creation mới nhất → review_id (BR-CS7-2)."
+        data_tests:
+          - accepted_values:
+              values: [0, 1]
+              quote: false
+      - name: _batch_id
+        description: "Batch nạp raw của dòng."
+      - name: _loaded_at
+        description: "Thời điểm nạp batch raw."

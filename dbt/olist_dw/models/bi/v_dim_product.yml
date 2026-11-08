@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: v_dim_product
+    description: "Power BI: dim product (1 dòng / product + -1); nối v_dim_category qua category_key."
+    columns:
+      - name: product_key
+        description: "Khoá nối với v_fact_sales."
+        data_tests: [unique, not_null]
+      - name: product_id
+        description: "Mã sản phẩm."
+      - name: category_key
+        description: "FK tới v_dim_category."
+      - name: photos_qty
+        description: "Số ảnh."
+      - name: weight_g
+        description: "Cân nặng (g)."
+      - name: volume_cm3
+        description: "Thể tích (cm³)."
+      - name: weight_band
+        description: "Band cân nặng."
+      - name: size_band
+        description: "Band thể tích."

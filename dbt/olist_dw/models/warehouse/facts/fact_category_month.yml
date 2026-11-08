@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: fact_category_month
+    description: "Periodic snapshot P3: 1 dòng = category × bang của khách × tháng mua (sparse), chỉ đơn counts_as_sale (BR-P3-2, BR-P3-3). Tỷ lệ = Σ tử / Σ mẫu."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [category_key, customer_state_code, month_date_key]
+    columns:
+      - name: category_key
+        description: "Nối dim_category."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_category'), field: category_key}
+      - name: customer_state_code
+        description: "Bang của khách (theo zip của đơn)."
+        data_tests: [not_null]
+      - name: month_date_key
+        description: "Ngày đầu tháng mua (YYYYMM01)."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: orders
+        description: "Số cặp (đơn, category). Cộng qua bang / tháng; không cộng qua category (0,8% đơn có nhiều category)."
+      - name: items
+        description: "Số item."
+      - name: gmv
+        description: "Σ item_price."
+      - name: freight
+        description: "Σ freight_value; freight ratio = Σ freight / Σ gmv (BR-P3-9)."
+      - name: customers
+        description: "Khách distinct trong ô; không cộng được."
+      - name: sellers_active
+        description: "Seller distinct (seller_id) trong ô; không cộng được."
+      - name: review_count
+        description: "Review mới nhất của các đơn chứa category, 1 lần / (đơn, category)."
+      - name: score_sum
+        description: "Σ điểm; avg = Σ score_sum / Σ review_count."
+      - name: low_score_count
+        description: "Σ review điểm ≤ 2 (BR-P3-6)."
+      - name: weight_g_sum
+        description: "Σ cân nặng item có cân nặng."
+      - name: weight_g_items
+        description: "Số item có cân nặng; cân nặng TB = weight_g_sum / weight_g_items."
+      - name: delivered_orders
+        description: "Cặp (đơn, category) có đơn đã giao (fact_order_fulfillment.is_delivered)."
+      - name: late_orders
+        description: "Cặp (đơn, category) có đơn giao trễ; late rate = Σ late_orders / Σ delivered_orders (BR-K2)."

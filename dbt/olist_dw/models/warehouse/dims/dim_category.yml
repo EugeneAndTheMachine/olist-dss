@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: dim_category
+    description: "1 dòng = 1 category (category_pt) + member -1. Cha của dim_product (snowflake, BR-CW5-1). Nguồn nhóm: seed category_group."
+    columns:
+      - name: category_key
+        description: "Surrogate key int_sk(category_pt); -1 = product không tìm thấy category."
+        data_tests: [unique, not_null]
+      - name: category_pt
+        description: "Category gốc (PT); 'unknown' = product không có category trong nguồn (BR-CS6-1)."
+        data_tests: [unique, not_null]
+      - name: category_en
+        description: "Category tiếng Anh; tên PT khi không có bản dịch."
+        data_tests: [not_null]
+      - name: category_name
+        description: "Tên hiển thị trên dashboard (tiếng Anh, viết hoa chữ đầu)."
+        data_tests: [not_null]
+      - name: category_group
+        description: "Nhóm category (11 nhóm + Unknown)."
+        data_tests: [not_null]
+      - name: is_rankable
+        description: "1 = được đưa vào Pareto / phân loại P3; 0 cho 'unknown' và -1 (BR-P3-11)."
+        data_tests:
+          - accepted_values:
+              values: [0, 1]
+              quote: false

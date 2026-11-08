@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: fact_order_item
+    description: "Transaction fact: 1 dòng = 1 item (order_id, order_item_id). GMV = Σ item_price trên đơn counts_as_sale (BR-K1, BR-CW8-1…2)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [order_id, order_item_id]
+    columns:
+      - name: purchase_date_key
+        description: "Ngày mua (YYYYMMDD); -1 khi thiếu."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: shipping_limit_date_key
+        description: "Hạn giao cho hãng vận chuyển (YYYYMMDD); -1 khi null (BR-CS2-2)."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: customer_key
+        description: "Khách (customer_unique_id)."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: product_key
+        description: "Sản phẩm; category qua dim_product.category_key."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_product'), field: product_key}
+      - name: seller_key
+        description: "Phiên bản seller hiệu lực tại ngày mua (BR-CW8-1)."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: customer_geo_key
+        description: "Địa lý của khách theo zip của đơn."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: seller_geo_key
+        description: "Địa lý của seller."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: order_status_key
+        description: "Trạng thái đơn; lọc doanh số bằng dim_order_status.counts_as_sale."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_order_status'), field: order_status_key}
+      - name: order_id
+        description: "Degenerate: mã đơn."
+      - name: order_item_id
+        description: "Degenerate: số thứ tự item."
+      - name: seller_id
+        description: "Degenerate: mã seller, dùng đếm seller và tính HHI không bị tách theo phiên bản SCD2."
+        data_tests: [not_null]
+      - name: item_price
+        description: "Giá item (BRL)."
+      - name: freight_value
+        description: "Phí vận chuyển (BRL)."
+      - name: item_total
+        description: "item_price + freight_value."
+      - name: item_count
+        description: "Luôn 1, để cộng số item."
