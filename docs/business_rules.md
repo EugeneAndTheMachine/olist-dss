@@ -30,6 +30,9 @@ Ví dụ:
 
 | ID | Câu hỏi | Bằng chứng | Lựa chọn | Quyết định | Code ở đâu | Test | Ai chốt / ngày |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| BR-CS2-1 | Khoá tự nhiên và dedup | BR-S1; 112 650 dòng raw | (a) giữ dòng `_loaded_at` mới nhất (b) giữ batch đầu | Đề xuất (a): key (`order_id`, `order_item_id`), `row_number()` theo `_loaded_at desc` | `stg_order_items` | unique combination key; số dòng = raw sau dedup | Vinh đề xuất 08/11, chờ consumer |
+| BR-CS2-2 | `shipping_limit_date` ngoài khoảng hợp lệ | Finding 7: 4 item (3 đơn, 2017) có hạn năm 2020 | (a) giữ (b) null + cờ (c) bỏ dòng | Đề xuất (b): ngoài 2016-01-01 … 2019-12-31 → null, `_dq_issue = shipping_limit_out_of_range` (BR-S6, không bỏ dòng) | `stg_order_items` | đếm `_dq_issue` = 4 | Vinh đề xuất 08/11, chờ consumer |
+| BR-CS2-3 | Kiểu dữ liệu tiền | price, freight là text trong raw | numeric(12,2) / float | Đề xuất numeric(12,2) cho `price`, `freight_value`; `shipping_limit_at` timestamp | `stg_order_items` | `not_null` price; price ≥ 0 | Vinh đề xuất 08/11, chờ consumer |
 
 ## Customers — `stg_customers`, `int_customer_map` (C-S3)
 
@@ -50,11 +53,18 @@ Ví dụ:
 
 | ID | Câu hỏi | Bằng chứng | Lựa chọn | Quyết định | Code ở đâu | Test | Ai chốt / ngày |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| BR-CS6-1 | Product không có category | A4: 610 product (1 603 item, 1,4%) | (a) null (b) `unknown` | Đề xuất (b): `category_pt = coalesce(clean, 'unknown')` | `stg_products` | `not_null` category_pt | Vinh đề xuất 08/11, chờ consumer |
+| BR-CS6-2 | Category không có bản dịch | A4: 13 product thuộc 2 category; translation 71 dòng | (a) null (b) giữ tên PT | Đề xuất (b): `category_en = coalesce(en, category_pt)` | `stg_products` | `not_null` category_en | Vinh đề xuất 08/11, chờ consumer |
+| BR-CS6-3 | Cân nặng 0, thiếu kích thước, cột sai chính tả | A4: 4 product weight 0; 2 thiếu kích thước; cột `*_lenght` | — | Đề xuất: weight 0 → null; đổi tên `*_lenght` → `*_length`; `volume_cm3` = L × H × W (null nếu thiếu 1 chiều) | `stg_products` | weight > 0 khi not null | Vinh đề xuất 08/11, chờ consumer |
+| BR-CS6-4 | Nhóm category (cho P3, P2 tuỳ chọn) | 73 category + `unknown`; thiết kế cũ có seed 11 nhóm + `Unknown` | (a) không nhóm (b) seed `category_group` | Đề xuất (b): khôi phục seed từ `83891b5` (74 dòng, header `product_category_name,category_group`) | seed `category_group` | unique/not_null; mọi `category_pt` của `stg_products` có trong seed | Vinh đề xuất 08/11, chờ consumer |
 
 ## Reviews — `stg_order_reviews` (C-S7)
 
 | ID | Câu hỏi | Bằng chứng | Lựa chọn | Quyết định | Code ở đâu | Test | Ai chốt / ngày |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| BR-CS7-1 | Khoá của review | A2: 789 review_id gắn > 1 đơn | (a) `review_id` (b) (`review_id`, `order_id`) | Đề xuất (b) + dedup BR-S1 | `stg_order_reviews` | unique combination key | Vinh đề xuất 08/11, chờ consumer |
+| BR-CS7-2 | Đơn có nhiều review: review nào được tính | A2: 547 đơn > 1 review (202 khác điểm); 768 đơn không có review | (a) trung bình (b) mới nhất | Đề xuất (b): `is_latest_for_order` theo `review_answer_timestamp desc`, `review_creation_date desc`, `review_id desc`; KPI chỉ dùng review mới nhất (BR-K3) | `stg_order_reviews` | đúng 1 latest / đơn có review (98 673 đơn) | Vinh đề xuất 08/11, chờ consumer |
+| BR-CS7-3 | Cờ dẫn xuất từ comment | comment rỗng / null | — | Đề xuất: `has_comment` = message không rỗng (0/1), `comment_length` = độ dài message | `stg_order_reviews` | `accepted_values` 0/1 | Vinh đề xuất 08/11, chờ consumer |
 
 ## Payments — `stg_order_payments` (C-S8, tuỳ chọn)
 
@@ -65,6 +75,11 @@ Ví dụ:
 
 | ID | Câu hỏi | Bằng chứng | Lựa chọn | Quyết định | Code ở đâu | Test | Ai chốt / ngày |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| BR-CW5-1 | Category: thuộc tính của `dim_product` hay dim riêng | P3 cần category làm trục phân tích; P1 dùng qua product | (a) cột trong `dim_product` (b) `dim_category` snowflake | Đề xuất (b): `dim_category` 1 dòng / `category_pt` (+ `-1`), `dim_product.category_key` FK; `is_rankable = 0` cho `unknown` | `dim_category`, `dim_product` | relationships product → category | Vinh đề xuất 08/11, chờ consumer |
+| BR-CW5-2 | Band cân nặng / kích thước | Thiết kế cũ `83891b5` | — | Đề xuất giữ band cũ: weight < 0,5 / 0,5–2 / 2–5 / 5–10 / ≥ 10 kg; volume < 1 / 1–10 / 10–50 / ≥ 50 L; thiếu → `Unknown` | `dim_product` | `accepted_values` band | Vinh đề xuất 08/11, chờ consumer |
+| BR-CW8-1 | Grain và seller version trong `fact_order_item` | 112 650 item; `dim_seller` SCD2 (BR-W10) | — | Đề xuất: 1 dòng / item; `seller_key` lookup SCD2 closed `purchase::date between valid_from and valid_to` (theo contract C-W4); giữ degenerate `seller_id` để đếm seller và tính HHI | `fact_order_item` | unique (`order_id`, `order_item_id`); unknown seller share ≤ 1% | Vinh đề xuất 08/11, chờ consumer |
+| BR-CW8-2 | Đối soát GMV | BR-K1: GMV = Σ price, chỉ `counts_as_sale` | — | Đề xuất: Σ `item_price` của fact = Σ `price` của `stg_order_items` (mọi status); lọc sale qua `dim_order_status` | `fact_order_item` | `assert_reconcile_gmv_stg_vs_fact` | Vinh đề xuất 08/11, chờ consumer |
+| BR-CW10-1 | Grain và seller của `fact_review` | Key (`review_id`, `order_id`); đơn nhiều seller 1,3% (BR-W5) | — | Đề xuất: 1 dòng / (`review_id`, `order_id`); `primary_seller_key` từ `int_order_primary_seller` (C-W7); measures `review_count = 1`, `score_sum`, `is_low_score` (≤ 2), `response_hours` | `fact_review` | score_sum ∈ [1, 5]·review_count; 1 latest / đơn | Vinh đề xuất 08/11, chờ consumer |
 
 ## P1 — Logistics (Cẩn)
 
@@ -80,3 +95,15 @@ Ví dụ:
 
 | ID | Câu hỏi | Bằng chứng | Lựa chọn | Quyết định | Code ở đâu | Test | Ai chốt / ngày |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| BR-P3-1 | Category key cho phân tích | 74 giá trị `category_pt` | (a) chuỗi trong fact (b) `dim_category` conformed | Đề xuất (b) qua `dim_product.category_key` | `dim_category`, `fact_category_month` | relationships | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-2 | Grain `fact_category_month` | ~11 657 ô có dữ liệu / 39 960 ô có thể | category × tháng / × bang × tháng | Đề xuất: category × bang khách × tháng mua (sparse), chỉ đơn `counts_as_sale` | `fact_category_month` | unique (category, state, month) | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-3 | Nguồn và cách gộp | Join review ở grain item làm `review_count` +13% (office_furniture 3,63 → 3,50) | (a) join ở grain item (b) gộp order × category trước | Đề xuất (b): gộp `fact_order_item` về order × category, rồi join 1–1 theo `order_id` với `fact_review` (latest) và `fact_order_fulfillment` | `fact_category_month` | đối soát items, GMV, review | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-4 | Growth | Sàn tăng 73,8% YoY; tăng trưởng tương đối không chặn (1 category ×543) | (a) YoY tuyệt đối (b) relative growth = (1+g_cat)/(1+g_platform) − 1 | Đề xuất (b), 3 tháng gần nhất vs cùng kỳ (BR-K5); chỉ tính khi ≥ 30 đơn ở cả hai cửa sổ, còn lại null + cờ low volume | `ml/p3_category/features.py` | không có growth ±inf | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-5 | Min volume (BR-K6 phần P3) | Rate của category vài chục đơn dao động mạnh | ngưỡng 50 / 100 / 200 | Đề xuất ≥ 100 đơn delivered trong 12 tháng; dưới → `Low volume`, không xếp loại | `features.py` | — | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-6 | Low score | Thang 1–5 | ≤ 1 / ≤ 2 / ≤ 3 | Đề xuất `review_score ≤ 2`, review mới nhất / đơn | `fact_review.is_low_score` | — | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-7 | Mức dự báo | 19 category có ≥ 10 đơn mọi tháng train; nhóm Food & Drinks có tháng chỉ 2 đơn | category / nhóm | Đề xuất: category nếu ≥ 10 đơn mọi tháng train; còn lại theo 11 nhóm; nhóm thưa chỉ baseline + cờ | `category_forecast.py` | — | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-8 | Ngưỡng cờ | Late rate sàn ~6,8%; category đủ volume 2,5–13%; HHI computers 0,555, office_furniture 0,426 (12 tháng) | — | Đề xuất: *Fix quality first* khi avg score < TB sàn − 0,2 hoặc low-score rate > TB sàn + 5 điểm % hoặc late rate > TB sàn + 2 điểm %; *Recruit sellers* khi HHI (theo `seller_id`) ≥ 0,25 | `category_portfolio.py` | — | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-9 | Lợi nhuận | Dataset không có giá vốn | — | Đề xuất proxy: freight ratio (Σ freight / Σ price) và AOV | `fact_category_month` | — | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-10 | Phân loại danh mục | Chia theo trung vị cho 18/18/9/5 (72% là high share) | (a) trung vị (b) Pareto 80% + dead band | Đề xuất (b): high share = nhóm chiếm 80% GMV tích luỹ của tập xếp loại; relative growth > +5% tăng, < −5% giảm; Grow / Invest selectively / Maintain / Review | `category_portfolio.py` | class ổn định khi đổi ngưỡng ±2 điểm % | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-11 | Category `unknown` | 1,4% item | (a) bỏ (b) giữ, không xếp loại | Đề xuất (b): hiện trên dashboard, `is_rankable = 0`, không vào Pareto / xếp loại / ML-3b | `dim_category` | unknown share (cả `-1` và `unknown`) warn > 2% | Vinh đề xuất 08/11, chờ consumer |
+| BR-P3-12 | Backtest phân loại | Q4/2016 gần như rỗng (2016: 293 đơn) | as-of 2017-12 / 2018-05 | Đề xuất as-of 2018-05-31: feature 2018-03..05 vs 2017-03..05; kết quả = thay đổi GMV share 2018-06..08 vs 2018-03..05 theo class | `category_portfolio.py` | báo kết quả, không chỉnh ngưỡng | Vinh đề xuất 08/11, chờ consumer |
