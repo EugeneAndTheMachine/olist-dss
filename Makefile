@@ -14,7 +14,6 @@ DBT_PROFILES_DIR := $(DBT_DIR)
 DBT := $(UV) run dbt
 COMPOSE := docker compose
 # DDL idempotent (schemas, meta, ml.*); 00_databases.sql chỉ chạy lần đầu nên không áp lại
-INIT_SQL := $(sort $(wildcard docker/postgres/init/0[1-9]*.sql))
 
 .PHONY: help venv lock up up-airflow down ingest load-raw db-init dbt-profile dbt-deps seed build ml ml-recommendations meta docs docs-serve all replay reset-db
 
@@ -52,9 +51,7 @@ load-raw:
 
 # Init script chỉ tự chạy khi volume trống: áp lại DDL (thêm bảng ml.* mới) trên DB đang có
 db-init:
-	@for f in $(INIT_SQL) ; do \
-		$(COMPOSE) exec -T -e PGOPTIONS=--client-min-messages=warning postgres psql -q -v ON_ERROR_STOP=1 -U $(POSTGRES_USER) -d $(POSTGRES_DB) < $$f || exit 1; \
-	done
+	$(PYTHON) -m scripts.db_init
 
 $(DBT_DIR)/profiles.yml:
 	cp $(DBT_DIR)/profiles.example.yml $(DBT_DIR)/profiles.yml

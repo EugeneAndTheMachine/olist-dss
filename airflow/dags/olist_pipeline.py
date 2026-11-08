@@ -1,7 +1,7 @@
 """DAG olist_pipeline — điều phối toàn bộ chuỗi, gọi cùng script/command với Makefile.
 
 download_kaggle → upload_to_lake → load_raw
-  → dbt_deps → dbt_seed → dbt_build
+  → db_init → dbt_deps → dbt_seed → dbt_build
   → ml_p* → ml_recommendations
   → meta_publish → dbt_docs_generate
 
@@ -89,6 +89,7 @@ with DAG(
     upload_to_lake = task("upload_to_lake", "python -m ingestion.upload_to_lake")
     load_raw = task("load_raw", "python -m ingestion.load_raw")
 
+    db_init = task("db_init", "python -m scripts.db_init")
     dbt_deps = task("dbt_deps", f"{DBT_PROFILE}; {DBT} deps")
     dbt_seed = task("dbt_seed", f"{DBT_PROFILE}; {DBT} seed")
     dbt_build = task("dbt_build", f"{DBT_PROFILE}; {DBT} build")
@@ -99,5 +100,5 @@ with DAG(
     meta_publish = task("meta_publish", "python -m ingestion.meta_publish")
     dbt_docs_generate = task("dbt_docs_generate", f"{DBT_PROFILE}; {DBT} docs generate")
 
-    extract >> upload_to_lake >> load_raw >> dbt_deps >> dbt_seed >> dbt_build
+    extract >> upload_to_lake >> load_raw >> db_init >> dbt_deps >> dbt_seed >> dbt_build
     dbt_build >> ml_recommendations >> meta_publish >> dbt_docs_generate
