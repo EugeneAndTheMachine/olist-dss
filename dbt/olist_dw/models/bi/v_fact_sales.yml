@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: v_fact_sales
+    description: "Power BI: fact_order_item (1 dòng / item). GMV = Σ item_price với dim_order_status.counts_as_sale = 1."
+    columns:
+      - name: purchase_date_key
+        description: "Nối v_dim_date."
+      - name: product_key
+        description: "Nối v_dim_product."
+      - name: seller_key
+        description: "Nối v_dim_seller."
+      - name: customer_geo_key
+        description: "Nối dim địa lý (khách)."
+      - name: order_status_key
+        description: "Nối v_dim_order_status."
+      - name: seller_id
+        description: "Đếm seller (DISTINCTCOUNT) không bị tách theo phiên bản."
+      - name: item_price
+        description: "Giá item; cơ sở GMV."
