@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: v_category_opportunity
+    description: "Power BI trang 7 và ml/recommendations.py: kết quả p3_category_portfolio mới nhất, 1 dòng / category. Chỉ số cửa sổ tính toàn quốc, 12 tháng (3 tháng cho growth) đến 2018-08."
+    columns:
+      - name: category_key
+        description: "Nối v_dim_category."
+        data_tests:
+          - unique
+          - not_null
+          - relationships: {to: ref('v_dim_category'), field: category_key}
+      - name: category_code
+        description: "category_pt; subject_id của v_recommendations."
+      - name: portfolio_class
+        description: "Grow / Invest selectively / Maintain / Review; null khi không xếp loại (Unknown, < 100 đơn delivered trong 12 tháng)."
+        data_tests:
+          - accepted_values: {values: ['Grow', 'Invest selectively', 'Maintain', 'Review']}
+      - name: recommended_action
+        description: "Hành động theo cấu hình mặc định (BR-P3-10); measure DAX P3 Action dùng cùng luật."
+      - name: opportunity_score
+        description: "Σ w·c / Σ w trên các thành phần khác null (percentile rank trong tập xếp loại)."
+      - name: rank
+        description: "Hạng theo opportunity_score (1 = cao nhất)."
+      - name: relative_growth
+        description: "(1 + yoy category) / (1 + yoy sàn) − 1; null khi < 30 đơn ở một trong hai cửa sổ 3 tháng."
+      - name: hhi
+        description: "Độ tập trung seller theo GMV, 12 tháng."
+      - name: quality_flag
+        description: "1 khi điểm review, tỷ lệ review thấp hoặc late rate kém hơn sàn quá ngưỡng (BR-P3-8)."
+      - name: recruit_sellers_flag
+        description: "1 khi HHI ≥ 0,25."

@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: ml_p3
+    description: "Output ML của P3 (DDL: docker/postgres/init/03_ml_p3.sql, áp bằng make db-init); chỉ ml/p3_category ghi, append-only theo model_run_id."
+    schema: ml
+    tables:
+      - name: category_forecast
+        description: "ML-3a: dự báo GMV 3 tháng theo category / nhóm, kèm dòng backtest 2018-06..08."
+      - name: category_opportunity
+        description: "ML-3b: feature, class, cờ, điểm cơ hội và hành động đề xuất theo category."

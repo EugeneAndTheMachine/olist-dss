@@ -95,10 +95,11 @@ with DAG(
     dbt_build = task("dbt_build", f"{DBT_PROFILE}; {DBT} build")
 
     # Mỗi bài toán thêm 1 task ml_p1 / ml_p2 / ml_p3 giữa dbt_build và ml_recommendations
+    ml_p3 = task("ml_p3", "python -m ml.p3_category")
     ml_recommendations = task("ml_recommendations", "python -m ml.recommendations")
 
     meta_publish = task("meta_publish", "python -m ingestion.meta_publish")
     dbt_docs_generate = task("dbt_docs_generate", f"{DBT_PROFILE}; {DBT} docs generate")
 
     extract >> upload_to_lake >> load_raw >> db_init >> dbt_deps >> dbt_seed >> dbt_build
-    dbt_build >> ml_recommendations >> meta_publish >> dbt_docs_generate
+    dbt_build >> ml_p3 >> ml_recommendations >> meta_publish >> dbt_docs_generate
