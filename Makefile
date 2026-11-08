@@ -52,7 +52,7 @@ load-raw:
 
 # Init script chỉ tự chạy khi volume trống: áp lại DDL (thêm bảng ml.* mới) trên DB đang có
 db-init:
-	for f in $(INIT_SQL) ; do \
+	@for f in $(INIT_SQL) ; do \
 		$(COMPOSE) exec -T -e PGOPTIONS=--client-min-messages=warning postgres psql -q -v ON_ERROR_STOP=1 -U $(POSTGRES_USER) -d $(POSTGRES_DB) < $$f || exit 1; \
 	done
 
