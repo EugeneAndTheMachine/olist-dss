@@ -1,0 +1,16 @@
+version: 2
+
+seeds:
+  - name: category_group
+    description: "Nhóm category cho phân tích P3 (BR-CS6-4): 73 category + 'unknown', 11 nhóm + 'Unknown'. Khôi phục từ thiết kế cũ (83891b5); header giữ tên gốc, dim_category đổi thành category_pt."
+    config:
+      column_types:
+        product_category_name: text
+        category_group: text
+    columns:
+      - name: product_category_name
+        description: "Category gốc (PT, chữ thường), khớp stg_products.category_pt."
+        data_tests: [unique, not_null]
+      - name: category_group
+        description: "Nhóm hiển thị (Home & Furniture, Electronics & Tech, …, Unknown)."
+        data_tests: [not_null]

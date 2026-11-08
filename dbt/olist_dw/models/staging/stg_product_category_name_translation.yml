@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: stg_product_category_name_translation
+    description: "1 dòng = 1 category (tên PT → tên EN). 71 dòng; 2 category của products không có bản dịch (BR-CS6-2)."
+    columns:
+      - name: category_pt
+        description: "Tên category gốc (tiếng Bồ Đào Nha, chữ thường)."
+        data_tests: [unique, not_null]
+      - name: category_en
+        description: "Tên category tiếng Anh (chữ thường)."
+        data_tests: [not_null]
+      - name: _batch_id
+        description: "Batch nạp raw của dòng."
+      - name: _loaded_at
+        description: "Thời điểm nạp batch raw."
