@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: stg_products
+    description: "1 dòng = 1 product_id, dedup giữa các batch raw. Category thiếu → 'unknown', thiếu bản dịch → tên PT (BR-CS6-1…3)."
+    columns:
+      - name: product_id
+        description: "Mã sản phẩm."
+        data_tests: [unique, not_null]
+      - name: category_pt
+        description: "Category gốc (PT, chữ thường); 'unknown' khi raw trống (BR-CS6-1). Mọi giá trị phải có trong seed category_group."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('category_group')
+              field: product_category_name
+      - name: category_en
+        description: "Category tiếng Anh; giữ tên PT khi không có bản dịch (BR-CS6-2)."
+        data_tests: [not_null]
+      - name: name_length
+        description: "Số ký tự tên sản phẩm (raw: product_name_lenght)."
+      - name: description_length
+        description: "Số ký tự mô tả (raw: product_description_lenght)."
+      - name: photos_qty
+        description: "Số ảnh sản phẩm."
+      - name: weight_g
+        description: "Cân nặng (g); 0 trong raw → null (BR-CS6-3)."
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: false
+      - name: length_cm
+        description: "Chiều dài (cm)."
+      - name: height_cm
+        description: "Chiều cao (cm)."
+      - name: width_cm
+        description: "Chiều rộng (cm)."
+      - name: volume_cm3
+        description: "Thể tích = dài × cao × rộng; null khi thiếu một chiều."
+      - name: _dq_issue
+        description: "Cờ chất lượng: 'missing_category', 'weight_zero' (nối bằng dấu phẩy) hoặc null. Không bỏ dòng (BR-S6)."
+        data_tests:
+          - accepted_values:
+              values: ['missing_category', 'weight_zero', 'missing_category,weight_zero']
+      - name: _batch_id
+        description: "Batch nạp raw của dòng."
+      - name: _loaded_at
+        description: "Thời điểm nạp batch raw."
