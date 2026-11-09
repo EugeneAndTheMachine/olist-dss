@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: v_hub_location
+    description: "P1 (ML-1b): Toạ độ và lưu lượng đơn hàng phân bổ cho từng kho / hub theo kịch bản."
+    columns:
+      - name: Scenario ID
+        description: "Mã kịch bản (join v_hub_scenario)"
+        quote: true
+      - name: Hub Count (k)
+        description: "Số lượng kho trong kịch bản"
+        quote: true
+      - name: Weight Basis
+        description: "Trọng số tối ưu"
+        quote: true
+      - name: Hub Rank
+        description: "Thứ tự kho theo lưu lượng đơn phục vụ (1..k)"
+        quote: true
+      - name: Geo Cell ID
+        description: "Mã ô lưới 0.5° × 0.5° đặt kho (BR-K4)"
+        quote: true
+      - name: Latitude
+        description: "Vĩ độ tâm ô đặt kho"
+        quote: true
+      - name: Longitude
+        description: "Kinh độ tâm ô đặt kho"
+        quote: true
+      - name: State Code
+        description: "Mã bang đặt kho"
+        quote: true
+      - name: Assigned Orders
+        description: "Số đơn đã giao thuộc vùng phục vụ của kho này"
+        quote: true
+      - name: Assigned Late Orders
+        description: "Số đơn giao trễ lịch sử thuộc vùng phục vụ của kho này"
+        quote: true
+      - name: Avg Assigned Distance (km)
+        description: "Khoảng cách trung bình từ kho này tới khách trong vùng phục vụ (km)"
+        quote: true
+      - name: model_run_id
+        description: "UUID lần chạy model"
+      - name: Model Version
+        description: "Phiên bản model"
+        quote: true
+

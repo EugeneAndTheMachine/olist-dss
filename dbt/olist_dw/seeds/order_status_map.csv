@@ -1,0 +1,9 @@
+order_status,status_group,counts_as_sale
+delivered,Completed,true
+shipped,Open,true
+invoiced,Open,true
+processing,Open,true
+approved,Open,true
+created,Open,true
+canceled,Cancelled,false
+unavailable,Cancelled,false

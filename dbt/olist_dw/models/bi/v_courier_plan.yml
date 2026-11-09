@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: v_courier_plan
+    description: >
+      P1 (ML-1c): Dự báo số đơn giao và xếp hạng ưu tiên bổ sung shipper theo bang cho 3 tháng tới.
+      Power BI tính số shipper cần thiết = (Forecast Delivered Orders / 30) / [Deliveries Per Courier Per Day].
+    columns:
+      - name: Forecast Month
+        description: "Tháng dự báo (ngày đầu tháng)"
+        quote: true
+      - name: State Code
+        description: "Mã bang nhận hàng"
+        quote: true
+      - name: Forecast Delivered Orders
+        description: "Số đơn giao dự báo trong tháng"
+        quote: true
+      - name: Current Late Rate
+        description: "Tỷ lệ giao trễ hiện hành của bang"
+        quote: true
+      - name: Forecast Late Orders
+        description: "Số đơn trễ dự kiến = Forecast Delivered Orders × Current Late Rate"
+        quote: true
+      - name: Transit Share
+        description: "Tỷ trọng thời gian nằm ở chặng vận chuyển (Σ transit_lag / Σ delivery_lag)"
+        quote: true
+      - name: Courier Priority Score
+        description: "Điểm ưu tiên bổ sung shipper = Forecast Late Orders × Transit Share"
+        quote: true
+      - name: Priority Rank
+        description: "Thứ hạng ưu tiên trong tháng (1 = cao nhất)"
+        quote: true
+      - name: Recommended Focus
+        description: "Đề xuất: Add Couriers / Last-mile Capacity vs Fix Seller Dispatch"
+        quote: true
+      - name: model_run_id
+        description: "UUID lần chạy model"
+      - name: Model Version
+        description: "Phiên bản model"
+        quote: true
+

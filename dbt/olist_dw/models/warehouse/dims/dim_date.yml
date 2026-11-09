@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: >
+      C-W1: Dimension thời gian (1 dòng / ngày từ 2016-01-01 đến 2019-12-31 + dòng unknown -1 cho mốc chưa xảy ra).
+      Rules: BR-W2, BR-W3, BR-W12.
+    columns:
+      - name: date_key
+        description: "Khoá số nguyên YYYYMMDD; -1 = unknown / chưa xảy ra (BR-W2)"
+        data_tests: [unique, not_null]
+      - name: full_date
+        description: "Ngày thực (null với dòng -1)"
+      - name: day_name
+        description: "Tên thứ trong tuần (tiếng Anh)"
+      - name: day_of_week_no
+        description: "Thứ tự ngày trong tuần theo ISO (1 = Thứ Hai … 7 = Chủ Nhật)"
+      - name: is_weekend
+        description: "Cờ cuối tuần (Thứ Bảy / Chủ Nhật)"
+      - name: iso_week
+        description: "Số tuần ISO trong năm"
+      - name: month_no
+        description: "Tháng (1–12)"
+      - name: month_name
+        description: "Tên tháng (tiếng Anh)"
+      - name: quarter
+        description: "Quý (1–4)"
+      - name: year
+        description: "Năm"
+      - name: year_month
+        description: "Chuỗi YYYY-MM"
+      - name: is_black_friday_week
+        description: "Thuộc tuần ISO chứa ngày Black Friday (thứ Sáu thứ 4 của tháng 11 — BR-W3, BR-W12)"
+        data_tests: [not_null]
+

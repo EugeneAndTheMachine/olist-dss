@@ -43,7 +43,7 @@ def register(run: ModelRun, train_window: str, params: dict[str, Any], metrics: 
                 """
                 insert into meta.model_registry
                     (model_run_id, model_name, model_version, trained_at, train_window, params_json, metrics_json)
-                values (:model_run_id, :model_name, :model_version, :trained_at, :train_window,
+                values (cast(:model_run_id as uuid), :model_name, :model_version, :trained_at, :train_window,
                         cast(:params as jsonb), cast(:metrics as jsonb))
                 """
             ),

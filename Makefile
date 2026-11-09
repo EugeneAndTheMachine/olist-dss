@@ -15,12 +15,12 @@ DBT := $(UV) run dbt
 COMPOSE := docker compose
 # DDL idempotent (schemas, meta, ml.*); 00_databases.sql chỉ chạy lần đầu nên không áp lại
 
-.PHONY: help venv lock up up-airflow down ingest load-raw db-init dbt-profile dbt-deps seed build ml ml-recommendations meta docs docs-serve all replay reset-db
+.PHONY: help venv lock up up-airflow down ingest load-raw db-init dbt-profile dbt-deps seed build ml-p1 ml ml-recommendations meta docs docs-serve all replay reset-db
 
 help:
 	@echo "make venv                 # uv sync: tạo/cập nhật .venv theo uv.lock"
 	@echo "make up | up-airflow | down"
-	@echo "make ingest | load-raw | db-init | dbt-deps | seed | build | ml | meta | docs | docs-serve"
+	@echo "make ingest | load-raw | db-init | dbt-deps | seed | build | ml-p1 | ml | meta | docs | docs-serve"
 	@echo "make all                  # up -> ingest -> load-raw -> db-init -> dbt -> ml -> meta -> docs"
 	@echo "make replay MONTH=2017-11 # nạp lại 1 tháng"
 	@echo "make reset-db             # XOÁ toàn bộ schema (hỏi xác nhận)"
@@ -68,7 +68,10 @@ build: dbt-profile
 	$(DBT) build
 
 # Mỗi bài toán thêm target ml-p1 / ml-p2 / ml-p3 vào trước ml-recommendations (đề xuất đọc output của chúng)
-ml: ml-recommendations
+ml-p1:
+	$(PYTHON) -m ml.p1_logistics.run_all
+
+ml: ml-p1 ml-recommendations
 
 ml-recommendations:
 	$(PYTHON) -m ml.recommendations

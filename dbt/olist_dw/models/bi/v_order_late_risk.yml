@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: v_order_late_risk
+    description: "P1 (ML-1a): Điểm rủi ro giao trễ tại thời điểm đặt đơn (chỉ lấy lần chạy mới nhất)."
+    columns:
+      - name: Order ID
+        description: "Mã đơn hàng (join v_fact_fulfillment)"
+        quote: true
+      - name: Late Risk Score
+        description: "Xác suất giao trễ dự đoán [0, 1]"
+        quote: true
+      - name: Late Risk Band
+        description: "Nhóm rủi ro: Low / Medium / High"
+        quote: true
+      - name: model_run_id
+        description: "UUID lần chạy model"
+      - name: Model Version
+        description: "Phiên bản model"
+        quote: true
+      - name: Scored At
+        description: "Thời điểm chấm điểm"
+        quote: true
+

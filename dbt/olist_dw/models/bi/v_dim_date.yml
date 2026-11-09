@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: v_dim_date
+    description: "C-B1: View bảng ngày cho Power BI (bỏ dòng -1 để Mark as date table). Rules: BR-W3, BR-W4."
+    columns:
+      - name: date_key
+        description: "Khoá ngày YYYYMMDD"
+        data_tests: [unique, not_null]
+      - name: Date
+        description: "Ngày thực"
+        quote: true
+        data_tests: [unique, not_null]
+      - name: Day Name
+        description: "Tên thứ"
+        quote: true
+      - name: Day Of Week No
+        description: "Thứ tự ngày ISO (1–7)"
+        quote: true
+      - name: Is Weekend
+        description: "Cuối tuần"
+        quote: true
+      - name: ISO Week
+        description: "Tuần ISO"
+        quote: true
+      - name: Month No
+        description: "Tháng (1–12)"
+        quote: true
+      - name: Month Name
+        description: "Tên tháng"
+        quote: true
+      - name: Month Short
+        description: "Tên tháng viết tắt 3 ký tự"
+        quote: true
+      - name: Quarter No
+        description: "Quý số (1–4)"
+        quote: true
+      - name: Quarter
+        description: "Quý (Q1–Q4)"
+        quote: true
+      - name: Year
+        description: "Năm"
+        quote: true
+      - name: Year Month
+        description: "YYYY-MM"
+        quote: true
+      - name: Year Month Sort
+        description: "YYYYMM (số nguyên để sort cột Year Month)"
+        quote: true
+      - name: Month Start
+        description: "Ngày đầu tháng"
+        quote: true
+      - name: Is Black Friday Week
+        description: "Thuộc tuần Black Friday (BR-W3)"
+        quote: true
+      - name: In Analysis Window
+        description: "Thuộc cửa sổ phân tích 2017-01-01 → 2018-08-31 (BR-W4)"
+        quote: true
+

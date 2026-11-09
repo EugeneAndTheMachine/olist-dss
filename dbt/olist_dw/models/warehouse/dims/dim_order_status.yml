@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: dim_order_status
+    description: "C-W6: Dimension trạng thái đơn hàng (8 trạng thái từ seed order_status_map + dòng unknown -1). Rules: BR-W1, BR-W2, BR-K1."
+    columns:
+      - name: order_status_key
+        description: "Surrogate key băm từ order_status (BR-W1); -1 = unknown (BR-W2)"
+        data_tests: [unique, not_null]
+      - name: order_status
+        description: "Trạng thái đơn hàng gốc"
+        data_tests: [unique, not_null]
+      - name: status_group
+        description: "Nhóm trạng thái: Completed / Open / Cancelled / Unknown"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["Completed", "Open", "Cancelled", "Unknown"]
+      - name: counts_as_sale
+        description: "true nếu đơn được tính vào GMV và Orders (BR-K1)"
+        data_tests: [not_null]
+

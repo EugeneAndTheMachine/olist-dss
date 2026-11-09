@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: stg_geolocation
+    description: >
+      C-S5: Bảng toạ độ địa lý đã gộp từ ~1M điểm về 1 dòng / zip_prefix (19 015 zip).
+      Lọc batch mới nhất (BR-G1), trung bình lat/lng trong bounding box Brazil (BR-G2),
+      lấy mode của city đã bỏ dấu (BR-S4, BR-G3) và state_code (BR-S5, BR-G3).
+    columns:
+      - name: zip_prefix
+        description: "5 chữ số đầu của mã bưu chính CEP Brazil (natural key, BR-S3)"
+        data_tests: [unique, not_null]
+      - name: city
+        description: "Tên thành phố xuất hiện nhiều nhất trong zip (đã bỏ dấu, lower case — BR-S4, BR-G3)"
+        data_tests: [not_null]
+      - name: state_code
+        description: "Mã bang 2 ký tự xuất hiện nhiều nhất trong zip (BR-S5, BR-G3)"
+        data_tests: [not_null]
+      - name: latitude
+        description: "Vĩ độ trung bình của các điểm trong bbox Brazil (−34…5,5); null nếu mọi điểm nằm ngoài (5 zip — BR-G2)"
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: -34
+              max_value: 5.5
+              where: "latitude is not null"
+      - name: longitude
+        description: "Kinh độ trung bình của các điểm trong bbox Brazil (−74…−34); null nếu mọi điểm nằm ngoài (5 zip — BR-G2)"
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: -74
+              max_value: -34
+              where: "longitude is not null"
+      - name: n_points
+        description: "Tổng số điểm toạ độ gốc trong raw của zip_prefix"
+        data_tests: [not_null]
+      - name: n_points_outside_brazil
+        description: "Số điểm bị loại do nằm ngoài bounding box Brazil (BR-G2)"
+        data_tests: [not_null]
+
