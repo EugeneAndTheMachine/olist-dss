@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: int_customer_map
+    description: >
+      1 dòng = 1 customer_id. Map customer_id → customer_unique_id (BR-CS3-1) và địa chỉ theo đơn (BR-CS3-2).
+      Facts tra dim_customer qua customer_unique_id và dim_geography qua customer_zip_prefix.
+    columns:
+      - name: customer_id
+        description: "Mã khách theo đơn (PK)."
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: "Mã người mua thật; join dim_customer."
+        data_tests: [not_null]
+      - name: customer_zip_prefix
+        description: "Zip 5 số của địa chỉ giao của đơn; join dim_geography.zip_prefix."
+        data_tests: [not_null]
+      - name: customer_city
+        description: "City của địa chỉ giao (đã chuẩn hoá BR-S4)."
+      - name: customer_state
+        description: "Bang của địa chỉ giao."
+        data_tests: [not_null]
