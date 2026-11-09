@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: v_dim_category
+    description: "Power BI: dim category (1 dòng / category + -1). Lọc is_rankable = 1 khi xếp hạng."
+    columns:
+      - name: category_key
+        description: "Khoá nối với v_dim_product, v_fact_category_month, v_category_opportunity."
+        data_tests: [unique, not_null]
+      - name: category_pt
+        description: "Category gốc (PT)."
+      - name: category_en
+        description: "Category tiếng Anh."
+      - name: category_name
+        description: "Tên hiển thị."
+      - name: category_group
+        description: "Nhóm category."
+      - name: is_rankable
+        description: "1 = được xếp hạng / phân loại."
