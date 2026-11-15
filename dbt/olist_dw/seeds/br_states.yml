@@ -1,0 +1,38 @@
+version: 2
+
+seeds:
+  - name: br_states
+    description: >
+      Dữ liệu tham chiếu ngoài dataset (C-R5, BR-W12): 27 bang Brazil → 5 vùng địa lý (IBGE) và dân số ước tính 2018
+      (IBGE, estimativas 1/7/2018). Khôi phục từ thiết kế cũ (83891b5: br_states.csv + br_state_population.csv).
+    config:
+      column_types:
+        state_code: text
+        state_name: text
+        region_name: text
+        ibge_state_id: integer
+        population_2018: bigint
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: >
+            region_name = case left(ibge_state_id::text, 1)
+              when '1' then 'Norte' when '2' then 'Nordeste' when '3' then 'Sudeste'
+              when '4' then 'Sul' when '5' then 'Centro-Oeste' end
+    columns:
+      - name: state_code
+        description: "Mã bang 2 ký tự (sigla)."
+        data_tests: [unique, not_null]
+      - name: state_name
+        description: "Tên bang."
+        data_tests: [not_null]
+      - name: region_name
+        description: "Vùng địa lý IBGE."
+        data_tests:
+          - accepted_values:
+              values: ['Norte', 'Nordeste', 'Sudeste', 'Sul', 'Centro-Oeste']
+      - name: ibge_state_id
+        description: "Mã bang 2 chữ số của IBGE (chữ số đầu = vùng)."
+        data_tests: [unique, not_null]
+      - name: population_2018
+        description: "Dân số ước tính 2018. Chỉ dùng ở cấp bang (KPI Orders / 1.000 dân, P2)."
+        data_tests: [not_null]

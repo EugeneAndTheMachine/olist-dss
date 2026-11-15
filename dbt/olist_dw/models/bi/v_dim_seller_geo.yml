@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: v_dim_seller_geo
+    description: "Power BI: dim_geography đóng vai seller geo (1 dòng / zip + -1). Nối v_fact_*[seller_geo_key]; drill region → state → zip_prefix_2 → zip_prefix_3 → zip."
+    columns:
+      - name: geo_key
+        description: "Khoá nối với seller_geo_key của fact."
+        data_tests: [unique, not_null]
+      - name: state_code
+        description: "Nối v_dim_state khi cần thuộc tính cấp bang (dân số)."

@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: int_order_agg
+    description: >
+      C-W7 (BR-W6): Tổng hợp số lượng item, giá trị hàng (order_value = Σ price), phí vận chuyển
+      và hạn giao carrier muộn nhất (max_shipping_limit_date) theo đơn. Grain: 1 dòng / order_id có item.
+    columns:
+      - name: order_id
+        description: "Mã đơn hàng"
+        data_tests: [unique, not_null]
+      - name: item_count
+        description: "Số item trong đơn"
+        data_tests: [not_null]
+      - name: order_value
+        description: "Tổng giá trị hàng Σ price (BRL, không gồm phí ship — BR-W6)"
+        data_tests: [not_null]
+      - name: freight_total
+        description: "Tổng phí vận chuyển Σ freight_value (BRL)"
+        data_tests: [not_null]
+      - name: order_total
+        description: "Tổng giá trị đơn gồm phí vận chuyển (order_value + freight_total)"
+        data_tests: [not_null]
+      - name: seller_count
+        description: "Số seller phân biệt trong đơn"
+        data_tests: [not_null]
+      - name: max_shipping_limit_date
+        description: "Hạn muộn nhất seller phải giao cho hãng vận chuyển trong đơn (dùng tính is_dispatch_late — BR-P1-1)"
+

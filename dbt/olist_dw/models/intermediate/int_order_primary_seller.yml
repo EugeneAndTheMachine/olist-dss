@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: int_order_primary_seller
+    description: >
+      C-W7 (BR-W5): Xác định primary_seller_id cho mỗi đơn hàng có item (seller của item có price cao nhất;
+      hoà lấy seller_id nhỏ nhất theo thứ tự chữ cái). Grain: 1 dòng / order_id có item (98 666 dòng).
+    columns:
+      - name: order_id
+        description: "Mã đơn hàng"
+        data_tests: [unique, not_null]
+      - name: primary_seller_id
+        description: "Mã seller chính của đơn hàng (BR-W5)"
+        data_tests: [not_null]
+

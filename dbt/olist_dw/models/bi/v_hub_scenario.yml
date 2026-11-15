@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: v_hub_scenario
+    description: "P1 (ML-1b): Bảng kịch bản đặt k kho / hub (k = 1..8) cho what-if trên trang 3 Power BI."
+    columns:
+      - name: Scenario ID
+        description: "Mã kịch bản (join v_hub_location)"
+        quote: true
+      - name: Hub Count (k)
+        description: "Số lượng kho / hub (1..8)"
+        quote: true
+      - name: Weight Basis
+        description: "Trọng số tối ưu: delivered_orders hoặc late_orders"
+        quote: true
+      - name: Method
+        description: "Phương pháp: p_median_milp hoặc weighted_kmeans"
+        quote: true
+      - name: Avg Distance (km)
+        description: "Khoảng cách chặng cuối trung bình từ hub gần nhất tới khách (km)"
+        quote: true
+      - name: P90 Distance (km)
+        description: "Phân vị thứ 90 khoảng cách từ hub tới khách (km)"
+        quote: true
+      - name: Demand Within 300km Share
+        description: "Tỷ lệ đơn hàng nằm trong bán kính 300 km quanh kho gần nhất"
+        quote: true
+      - name: Predicted Late Rate
+        description: "Tỷ lệ giao trễ dự báo (chấm lại bằng ML-1a khi thay khoảng cách bằng hub–customer)"
+        quote: true
+      - name: model_run_id
+        description: "UUID lần chạy model"
+      - name: Model Version
+        description: "Phiên bản model"
+        quote: true
+

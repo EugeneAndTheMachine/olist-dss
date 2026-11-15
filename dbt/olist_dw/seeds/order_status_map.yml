@@ -1,0 +1,19 @@
+version: 2
+
+seeds:
+  - name: order_status_map
+    description: "C-R4 / C-W6 (BR-K1, BR-O1): Ánh xạ 8 trạng thái đơn hàng sang nhóm trạng thái và cờ tính doanh số (counts_as_sale)."
+    columns:
+      - name: order_status
+        description: "Trạng thái đơn hàng gốc (lower case)"
+        data_tests: [unique, not_null]
+      - name: status_group
+        description: "Nhóm trạng thái: Completed / Open / Cancelled"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["Completed", "Open", "Cancelled"]
+      - name: counts_as_sale
+        description: "true nếu đơn được tính vào GMV và tổng số đơn bán (BR-K1)"
+        data_tests: [not_null]
+

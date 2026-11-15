@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: ml_p1
+    description: "P1 (Logistics Manager) — Bảng output ML trong schema ml (DDL ở docker/postgres/init/03_ml_p1.sql)."
+    schema: ml
+    tables:
+      - name: order_late_risk
+        description: "ML-1a: Điểm rủi ro giao trễ theo đơn hàng tại thời điểm mua"
+      - name: late_risk_drivers
+        description: "ML-1a: Feature importance giải thích nguyên nhân giao trễ"
+      - name: hub_scenario
+        description: "ML-1b: Chỉ số tổng hợp của kịch bản đặt k kho / hub"
+      - name: hub_location
+        description: "ML-1b: Vị trí các kho / hub được chọn trong mỗi kịch bản"
+      - name: courier_plan
+        description: "ML-1c: Dự báo số đơn giao và ưu tiên phân bổ shipper theo bang"
+

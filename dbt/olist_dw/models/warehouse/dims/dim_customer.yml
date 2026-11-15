@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: dim_customer
+    description: >
+      C-W3. 1 dòng = 1 người mua thật (customer_unique_id, BR-CS3-1) + member -1. Type 1. Fact tra customer_key qua
+      int_customer_map.customer_unique_id; địa chỉ theo đơn nằm ở customer_geo_key của fact, không lấy từ dim này.
+      Segment khách (nếu có) nối ở view bi, không lưu ở đây (BR-CW3-3).
+    columns:
+      - name: customer_key
+        description: "Surrogate key int_sk(customer_unique_id); -1 = unknown."
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: "Mã người mua thật (natural key)."
+        data_tests: [unique, not_null]
+      - name: customer_geo_key
+        description: "Zip của đơn đầu tiên → dim_geography (BR-W8, BR-CW3-1)."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geography')
+              field: geo_key
+      - name: first_order_date_key
+        description: "Ngày mua của đơn đầu tiên (YYYYMMDD), tính trên mọi đơn kể cả huỷ (BR-CW3-2). Dùng cho customers_new của fact_geo_month."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: order_count
+        description: "Số đơn của khách (mọi status)."
+      - name: is_repeat_customer
+        description: "1 nếu order_count ≥ 2."
+        data_tests:
+          - accepted_values:
+              values: [0, 1]

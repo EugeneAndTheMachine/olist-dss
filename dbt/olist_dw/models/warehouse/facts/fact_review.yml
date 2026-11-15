@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: fact_review
+    description: "1 dòng = 1 cặp (review_id, order_id). KPI review dùng is_latest_for_order = 1 (BR-K3, BR-CW10-1)."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [review_id, order_id]
+    columns:
+      - name: review_creation_date_key
+        description: "Ngày gửi khảo sát (YYYYMMDD)."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: review_answer_date_key
+        description: "Ngày khách trả lời (YYYYMMDD)."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: customer_key
+        description: "Khách."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: primary_seller_key
+        description: "Seller chính của đơn (BR-W5), phiên bản tại ngày mua."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: customer_geo_key
+        description: "Địa lý của khách."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: order_status_key
+        description: "Trạng thái đơn."
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_order_status'), field: order_status_key}
+      - name: review_id
+        description: "Degenerate: mã review."
+      - name: order_id
+        description: "Degenerate: mã đơn; nối fact_order_item, fact_order_fulfillment."
+      - name: review_count
+        description: "Luôn 1."
+      - name: score_sum
+        description: "Điểm 1–5; avg = Σ score_sum / Σ review_count."
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 1, max_value: 5}
+      - name: is_low_score
+        description: "1 khi điểm ≤ 2 (BR-P3-6)."
+      - name: has_comment
+        description: "1 khi có nội dung comment."
+      - name: comment_length
+        description: "Số ký tự comment."
+      - name: response_hours
+        description: "Giờ từ lúc gửi khảo sát tới lúc khách trả lời."
+      - name: is_latest_for_order
+        description: "1 cho review được tính của đơn (BR-CS7-2)."

@@ -16,7 +16,9 @@ clean-targets: ["target", "dbt_packages"]
 vars:
   analysis_start: "{{ env_var('ANALYSIS_START', '2017-01-01') }}"
   analysis_end: "{{ env_var('ANALYSIS_END', '2018-08-31') }}"
-  # Biến nghiệp vụ (date spine, SCD2, rule version…) thêm khi chốt nghiệp vụ: docs/rebuild_guide.md
+  # BR-W3: dim_date 2016-01-01 → 2019-12-31, cả hai mốc đều tính (stg_order_items dùng cùng quy ước)
+  date_spine_start: "2016-01-01"
+  date_spine_end: "2019-12-31"
 
 # Power BI đăng nhập bằng user chỉ đọc schema bi (macros/grant_bi_reader.sql)
 on-run-end:

@@ -1,0 +1,17 @@
+version: 2
+
+models:
+  - name: v_fact_geo_month
+    description: >
+      Power BI: fact_geo_month (zip × tháng) trong cửa sổ 2017-01 … 2018-08. Một bảng fact, nối một dim geo
+      (v_dim_customer_geo) qua geo_key: measure cầu và cung cùng chia theo khu vực của dòng. Measure P2 ở
+      docs/kpi_dictionary.md mục P2.
+    columns:
+      - name: geo_key
+        description: "Nối v_dim_customer_geo (hoặc v_dim_seller_geo, cùng khoá)."
+        data_tests: [not_null]
+      - name: month_date_key
+        description: "Nối v_dim_date[date_key] (ngày đầu tháng)."
+        data_tests: [not_null]
+      - name: month_date
+        description: "Ngày đầu tháng."

@@ -1,0 +1,115 @@
+version: 2
+
+models:
+  - name: fact_order_fulfillment
+    description: >
+      C-W9: Accumulating snapshot fact — 1 dòng / đơn hàng (99 441 dòng), 5 vai trò ngày điền dần (-1 = chưa xảy ra).
+      Cố ý vi phạm tính non-updatable của fact nên có _dw_loaded_at, _dw_updated_at.
+      Rules: BR-W2, BR-W5, BR-W6, BR-W11, BR-O2, BR-O3, BR-O4, BR-K2, BR-P1-1.
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('stg_orders')
+    columns:
+      - name: order_id
+        description: "Mã đơn hàng (degenerate dimension)"
+        data_tests: [unique, not_null]
+      - name: purchase_date_key
+        description: "Ngày mua (YYYYMMDD)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: approved_date_key
+        description: "Ngày duyệt thanh toán (-1 nếu chưa duyệt)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: carrier_date_key
+        description: "Ngày bàn giao cho hãng vận chuyển (-1 nếu chưa giao carrier)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: delivered_date_key
+        description: "Ngày giao tới khách (-1 nếu chưa giao)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: estimated_date_key
+        description: "Ngày hứa giao (YYYYMMDD)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_date'), field: date_key}
+      - name: customer_key
+        description: "FK → dim_customer"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_customer'), field: customer_key}
+      - name: primary_seller_key
+        description: "FK → dim_seller (version hiệu lực tại ngày mua của primary seller — BR-W5; -1 nếu đơn không có item)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_seller'), field: seller_key}
+      - name: customer_geo_key
+        description: "FK → dim_geography (zip giao hàng của khách)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: seller_geo_key
+        description: "FK → dim_geography (zip của primary seller)"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_geography'), field: geo_key}
+      - name: order_status_key
+        description: "FK → dim_order_status"
+        data_tests:
+          - not_null
+          - relationships: {to: ref('dim_order_status'), field: order_status_key}
+      - name: item_count
+        description: "Số lượng item trong đơn — additive (0 cho 775 đơn không có item)"
+        data_tests: [not_null]
+      - name: order_value
+        description: "Tổng giá trị hàng Σ price, không gồm phí ship (BRL — BR-W6) — additive"
+        data_tests: [not_null]
+      - name: freight_total
+        description: "Tổng phí vận chuyển Σ freight_value (BRL) — additive"
+        data_tests: [not_null]
+      - name: is_delivered
+        description: "1 nếu status = delivered và có ngày khách nhận (BR-O2, BR-W11) — additive"
+        data_tests:
+          - not_null
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: is_late
+        description: "1 nếu is_delivered = 1 và delivered::date > estimated::date (BR-O3, BR-W11) — additive"
+        data_tests:
+          - not_null
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: is_dispatch_late
+        description: "1 nếu carrier_date > max(shipping_limit_date) của đơn (BR-P1-1) — additive"
+        data_tests:
+          - not_null
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: has_carrier_date
+        description: "1 nếu đơn đã có mốc carrier_date (mẫu số của Dispatch late rate — BR-P1-1)"
+        data_tests:
+          - not_null
+          - accepted_values: {values: [0, 1], quote: false}
+      - name: approval_lag
+        description: "Thời gian duyệt đơn = approved − purchase (ngày; null nếu âm — BR-P1-1)"
+      - name: dispatch_lag
+        description: "Thời gian seller chuẩn bị hàng = carrier − approved (ngày; null nếu âm — BR-P1-1)"
+      - name: transit_lag
+        description: "Thời gian vận chuyển = delivered − carrier (ngày; null nếu âm — BR-P1-1)"
+      - name: delivery_lag
+        description: "Tổng thời gian giao hàng = delivered − purchase (ngày, chỉ khi is_delivered = 1 — BR-P1-1)"
+      - name: promised_lag
+        description: "Số ngày hứa giao = estimated − purchase (ngày — BR-P1-1)"
+      - name: delay_days
+        description: "Chênh lệch ngày giao thực tế so với ngày hứa = delivered::date − estimated::date (âm = sớm, chỉ khi is_delivered = 1 — BR-O3)"
+      - name: seller_customer_distance_km
+        description: "Khoảng cách đường chim bay Haversine (km) giữa tâm zip seller và zip khách (BR-P1-1) — non-additive"
+      - name: _dq_issue
+        description: "Cờ lỗi mốc thời gian kế thừa từ stg_orders (BR-O4)"
+      - name: _dw_loaded_at
+        description: "Thời điểm nạp dòng vào warehouse"
+      - name: _dw_updated_at
+        description: "Thời điểm cập nhật dòng gần nhất"
+

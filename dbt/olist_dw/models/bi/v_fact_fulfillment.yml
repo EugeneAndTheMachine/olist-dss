@@ -1,0 +1,79 @@
+version: 2
+
+models:
+  - name: v_fact_fulfillment
+    description: "C-B1: View fact_order_fulfillment cho Power BI (grain: 1 đơn). Phục vụ bài toán P1 & KPI giao hàng."
+    data_tests:
+      - dbt_utils.equal_rowcount:
+          compare_model: ref('fact_order_fulfillment')
+    columns:
+      - name: Order ID
+        description: "Mã đơn hàng"
+        quote: true
+        data_tests: [unique, not_null]
+      - name: purchase_date_key
+        description: "FK → v_dim_date (active)"
+      - name: approved_date_key
+        description: "FK → v_dim_date (inactive)"
+      - name: carrier_date_key
+        description: "FK → v_dim_date (inactive)"
+      - name: delivered_date_key
+        description: "FK → v_dim_date (inactive)"
+      - name: estimated_date_key
+        description: "FK → v_dim_date (inactive)"
+      - name: customer_key
+        description: "FK → v_dim_customer"
+      - name: seller_key
+        description: "FK → v_dim_seller (primary seller tại ngày mua)"
+      - name: customer_geo_key
+        description: "FK → v_dim_customer_geo"
+      - name: seller_geo_key
+        description: "FK → v_dim_seller_geo"
+      - name: order_status_key
+        description: "FK → v_dim_order_status"
+      - name: Item Count
+        description: "Số lượng item trong đơn"
+        quote: true
+      - name: Order Value
+        description: "Giá trị hàng Σ price (BRL)"
+        quote: true
+      - name: Freight Total
+        description: "Tổng phí ship (BRL)"
+        quote: true
+      - name: Is Delivered
+        description: "0/1 đã giao"
+        quote: true
+      - name: Is Late
+        description: "0/1 giao trễ"
+        quote: true
+      - name: Is Dispatch Late
+        description: "0/1 seller giao trễ cho carrier"
+        quote: true
+      - name: Has Carrier Date
+        description: "0/1 có mốc giao carrier"
+        quote: true
+      - name: Approval Lag (days)
+        description: "Thời gian duyệt (ngày)"
+        quote: true
+      - name: Dispatch Lag (days)
+        description: "Thời gian seller chuẩn bị hàng (ngày)"
+        quote: true
+      - name: Transit Lag (days)
+        description: "Thời gian carrier vận chuyển (ngày)"
+        quote: true
+      - name: Delivery Lag (days)
+        description: "Tổng thời gian giao hàng (ngày)"
+        quote: true
+      - name: Promised Lag (days)
+        description: "Thời gian hứa giao (ngày)"
+        quote: true
+      - name: Delay Days
+        description: "Số ngày trễ (âm = sớm)"
+        quote: true
+      - name: Distance (km)
+        description: "Khoảng cách Haversine seller–customer (km)"
+        quote: true
+      - name: DQ Issue
+        description: "Cờ lỗi thứ tự thời gian"
+        quote: true
+

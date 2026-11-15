@@ -1,0 +1,28 @@
+state_code,state_name,region_name,ibge_state_id,population_2018
+AC,Acre,Norte,12,869265
+AL,Alagoas,Nordeste,27,3322820
+AM,Amazonas,Norte,13,4080611
+AP,Amapá,Norte,16,829494
+BA,Bahia,Nordeste,29,14812617
+CE,Ceará,Nordeste,23,9075649
+DF,Distrito Federal,Centro-Oeste,53,2974703
+ES,Espírito Santo,Sudeste,32,3972388
+GO,Goiás,Centro-Oeste,52,6921161
+MA,Maranhão,Nordeste,21,7035055
+MG,Minas Gerais,Sudeste,31,21040662
+MS,Mato Grosso do Sul,Centro-Oeste,50,2748023
+MT,Mato Grosso,Centro-Oeste,51,3441998
+PA,Pará,Norte,15,8513497
+PB,Paraíba,Nordeste,25,3996496
+PE,Pernambuco,Nordeste,26,9496294
+PI,Piauí,Nordeste,22,3264531
+PR,Paraná,Sul,41,11348937
+RJ,Rio de Janeiro,Sudeste,33,17159960
+RN,Rio Grande do Norte,Nordeste,24,3479010
+RO,Rondônia,Norte,11,1757589
+RR,Roraima,Norte,14,576568
+RS,Rio Grande do Sul,Sul,43,11329605
+SC,Santa Catarina,Sul,42,7075494
+SE,Sergipe,Nordeste,28,2278308
+SP,São Paulo,Sudeste,35,45538936
+TO,Tocantins,Norte,17,1555229

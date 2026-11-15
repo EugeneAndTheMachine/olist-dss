@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: v_late_risk_drivers
+    description: "P1 (ML-1a): Mức độ đóng góp của từng biến giải thích rủi ro giao trễ (lần chạy mới nhất)."
+    columns:
+      - name: Feature
+        description: "Tên đặc trưng đầu vào"
+        quote: true
+      - name: Importance
+        description: "Điểm quan trọng (gain / permutation importance)"
+        quote: true
+      - name: Importance Share
+        description: "Tỷ trọng đóng góp (tổng = 1)"
+        quote: true
+      - name: model_run_id
+        description: "UUID lần chạy model"
+      - name: Model Version
+        description: "Phiên bản model"
+        quote: true
+

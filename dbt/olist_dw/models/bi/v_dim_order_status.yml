@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: v_dim_order_status
+    description: "C-B1: View trạng thái đơn hàng cho Power BI (BR-K1)."
+    columns:
+      - name: order_status_key
+        description: "PK trạng thái đơn"
+        data_tests: [unique, not_null]
+      - name: Order Status
+        description: "Trạng thái đơn gốc"
+        quote: true
+      - name: Status Group
+        description: "Completed / Open / Cancelled / Unknown"
+        quote: true
+      - name: Counts As Sale
+        description: "Cờ đơn tính vào doanh số (BR-K1)"
+        quote: true
+

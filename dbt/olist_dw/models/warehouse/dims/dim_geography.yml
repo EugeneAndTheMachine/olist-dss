@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: dim_geography
+    description: >
+      C-W2. 1 dòng = 1 zip prefix 5 số (geolocation ∪ customers ∪ sellers, BR-W9) + member -1. Type 1, role-playing:
+      customer geo / seller geo. Hierarchy zip_prefix → zip_prefix_3 → zip_prefix_2 → state → region; city là thuộc tính
+      duyệt (không lồng sạch trong zip_prefix_3).
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "length(zip_prefix) = 5 and zip_prefix_3 = left(zip_prefix, 3) and zip_prefix_2 = left(zip_prefix, 2)"
+          config:
+            where: "geo_key <> -1"
+      - dbt_utils.expression_is_true:
+          expression: "latitude between -34 and 5.5 and longitude between -74 and -34"
+          config:
+            where: "latitude is not null"
+    columns:
+      - name: geo_key
+        description: "Surrogate key int_sk(zip_prefix); -1 = unknown (BR-W2)."
+        data_tests: [unique, not_null]
+      - name: zip_prefix
+        description: "Zip prefix 5 số (natural key)."
+        data_tests: [unique, not_null]
+      - name: zip_prefix_3
+        description: "3 số đầu của zip: CEP sector."
+      - name: zip_prefix_2
+        description: "2 số đầu của zip: CEP sub-region."
+      - name: city
+        description: "City của zip: mode của geolocation; zip không có trong geolocation lấy mode của customers ∪ sellers (BR-CW2-2)."
+      - name: state_code
+        description: "Mã bang; cùng nguồn ưu tiên như city. 'NA' cho member -1."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('br_states')
+              field: state_code
+              config:
+                where: "geo_key <> -1"
+      - name: state_name
+        description: "Tên bang (seed br_states)."
+      - name: region_name
+        description: "Vùng IBGE (seed br_states, BR-W12)."
+        data_tests: [not_null]
+      - name: latitude
+        description: "Vĩ độ trung bình của zip (stg_geolocation, chỉ điểm trong bbox Brazil). Null khi zip không có trong geolocation hoặc mọi điểm ngoài bbox."
+      - name: longitude
+        description: "Kinh độ trung bình của zip, cùng quy tắc với latitude."
+      - name: geo_cell_id
+        description: "Ô lưới 0,5° × 0,5°: floor(lat/0.5) || '_' || floor(lng/0.5) (BR-CW2-3, BR-K4). Null khi không có toạ độ."
+      - name: geo_cell_lat
+        description: "Vĩ độ tâm ô lưới."
+      - name: geo_cell_lng
+        description: "Kinh độ tâm ô lưới."
+      - name: in_geolocation
+        description: "1 nếu zip có trong raw.geolocation, 0 nếu chỉ thấy ở customers / sellers (BR-CW2-1)."
+        data_tests:
+          - accepted_values:
+              values: [0, 1]

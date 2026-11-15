@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: >
+      C-S1: Đơn hàng đã dedup theo batch mới nhất (BR-S1), ép kiểu (BR-S2), gắn cờ lỗi thứ tự thời gian (BR-S6, BR-O4)
+      và tính sẵn cờ giao hàng / giao trễ dùng chung (BR-S7, BR-O2, BR-O3). Grain: 1 dòng / order_id (99 441 dòng).
+    columns:
+      - name: order_id
+        description: "Mã đơn hàng (natural key, BR-S1)"
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: "Mã khách theo đơn (Olist cấp mới mỗi đơn; nối sang customer_unique_id qua C-S3)"
+        data_tests: [not_null]
+      - name: order_status
+        description: "Trạng thái đơn hàng viết thường (BR-O1, 8 trạng thái)"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["delivered", "shipped", "canceled", "unavailable", "invoiced", "processing", "created", "approved"]
+      - name: order_purchase_timestamp
+        description: "Thời điểm khách đặt mua"
+        data_tests: [not_null]
+      - name: order_approved_at
+        description: "Thời điểm duyệt thanh toán (profiling: 160 đơn null)"
+      - name: order_delivered_carrier_date
+        description: "Thời điểm seller bàn giao cho hãng vận chuyển"
+      - name: order_delivered_customer_date
+        description: "Thời điểm giao tới khách; null nếu chưa giao hoặc vi phạm delivered_before_purchase (BR-O4)"
+      - name: order_estimated_delivery_date
+        description: "Ngày hứa giao cho khách (luôn 00:00:00, so sánh theo ::date — BR-O3)"
+        data_tests: [not_null]
+      - name: _dq_issue
+        description: >
+          Danh sách lỗi thứ tự mốc thời gian phân cách bởi dấu phẩy (BR-S6, BR-O4):
+          delivered_before_purchase, carrier_before_purchase, carrier_before_approved, delivered_before_carrier
+      - name: _batch_id
+        description: "Mã batch nạp raw"
+      - name: _loaded_at
+        description: "Thời điểm nạp vào raw"
+      - name: is_delivered
+        description: "Cờ đơn đã giao thành công: order_status = 'delivered' and order_delivered_customer_date is not null (BR-O2)"
+        data_tests: [not_null]
+      - name: is_late
+        description: "Cờ đơn giao trễ: is_delivered and delivered::date > estimated::date (BR-O3, 6,77%)"
+        data_tests: [not_null]
+      - name: delay_days
+        description: "Số ngày trễ = delivered::date - estimated::date (âm = giao sớm, null khi chưa giao; BR-O3)"
+
