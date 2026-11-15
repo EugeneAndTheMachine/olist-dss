@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: stg_sellers
+    description: "1 dòng = 1 seller. Dedup giữa các batch raw: giữ _loaded_at mới nhất (BR-CS4-1)."
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "length(seller_zip_prefix) = 5"
+    columns:
+      - name: seller_id
+        description: "Mã seller."
+        data_tests: [unique, not_null]
+      - name: seller_zip_prefix
+        description: "Zip 5 số, lpad '0' (BR-S3). 7 zip không có trong geolocation, vẫn giữ (BR-CS4-3)."
+        data_tests: [not_null]
+      - name: seller_city
+        description: >
+          City: lower, bỏ dấu, gộp khoảng trắng (BR-S4). Nguồn nhập tay rất bẩn (vd 'sbc/sp', 'sao paulo / sao paulo'),
+          không sửa từng giá trị; city phân tích lấy từ dim_geography (BR-CS4-2).
+      - name: seller_state
+        description: "Mã bang 2 ký tự, upper (BR-S5)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO']
+      - name: _batch_id
+        description: "Batch nạp raw của dòng."
+      - name: _loaded_at
+        description: "Thời điểm nạp batch raw."
