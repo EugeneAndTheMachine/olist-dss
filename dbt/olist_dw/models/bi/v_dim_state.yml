@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: v_dim_state
+    description: "Power BI: 1 dòng / bang + 'NA'. Nối v_fact_category_month[customer_state_code] và các view P2 cấp bang; state_population cho KPI Orders / 1.000 dân."
+    columns:
+      - name: state_code
+        description: "Mã bang; 'NA' khớp state_code của member -1 trong dim_geography."
+        data_tests: [unique, not_null]
+      - name: state_population
+        description: "Dân số ước tính 2018 (IBGE). Null cho 'NA'."

@@ -1,0 +1,9 @@
+version: 2
+
+models:
+  - name: v_dim_seller
+    description: "Power BI: dim_seller (SCD2, 1 dòng / phiên bản seller + -1). Nối v_fact_*[seller_key] / [primary_seller_key]; đếm seller dùng seller_id, không dùng seller_key."
+    columns:
+      - name: seller_key
+        description: "Khoá nối với fact (phiên bản hiệu lực tại ngày mua)."
+        data_tests: [unique, not_null]
