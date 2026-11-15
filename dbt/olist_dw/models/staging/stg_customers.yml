@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: >
+      1 dòng = 1 customer_id. Olist cấp customer_id mới cho mỗi đơn, nên 1 dòng ứng với địa chỉ giao của 1 đơn;
+      người mua thật là customer_unique_id (BR-CS3-1). Dedup giữa các batch raw: giữ _loaded_at mới nhất (BR-CS3-3).
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "length(customer_zip_prefix) = 5"
+    columns:
+      - name: customer_id
+        description: "Mã khách theo đơn (FK từ stg_orders.customer_id)."
+        data_tests: [unique, not_null]
+      - name: customer_unique_id
+        description: "Mã người mua thật; dùng để đếm khách (BR-CS3-1)."
+        data_tests: [not_null]
+      - name: customer_zip_prefix
+        description: "Zip 5 số của địa chỉ giao của đơn, lpad '0' (BR-S3)."
+        data_tests: [not_null]
+      - name: customer_city
+        description: "City: lower, bỏ dấu (unaccent), gộp khoảng trắng (BR-S4). Chỉ để tham khảo; city phân tích lấy từ dim_geography."
+      - name: customer_state
+        description: "Mã bang 2 ký tự, upper (BR-S5)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO']
+      - name: _batch_id
+        description: "Batch nạp raw của dòng."
+      - name: _loaded_at
+        description: "Thời điểm nạp batch raw."
