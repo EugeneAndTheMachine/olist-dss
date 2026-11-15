@@ -12,8 +12,6 @@ Cột: **KPI** · **Định nghĩa nghiệp vụ** · **Công thức** (tử / m
 
 | KPI | Định nghĩa nghiệp vụ | Công thức | Fact nguồn | Bộ lọc | Rule liên quan | DAX measure |
 | --- | --- | --- | --- | --- | --- | --- |
-| Orders | Số đơn hàng được tính là bán | $\text{COUNT}(\text{order\_id})$ | `fact_order_fulfillment` (`v_fact_fulfillment`) | `v_dim_order_status[Counts As Sale] = TRUE` | BR-K1 | `Orders = CALCULATE(COUNTROWS(v_fact_fulfillment), v_dim_order_status[Counts As Sale] = TRUE())` |
-| AOV | Giá trị đơn hàng trung bình (không gồm phí ship) | $\sum \text{order\_value} / \text{Orders}$ | `fact_order_fulfillment` (`v_fact_fulfillment`) | `v_dim_order_status[Counts As Sale] = TRUE` | BR-K1, BR-W6 | `AOV = DIVIDE(CALCULATE(SUM(v_fact_fulfillment[Order Value]), v_dim_order_status[Counts As Sale] = TRUE()), [Orders])` |
 | Delivered orders | Số đơn đã giao thành công cho khách | $\sum \text{is\_delivered}$ | `fact_order_fulfillment` (`v_fact_fulfillment`) | — | BR-O2, BR-W11 | `Delivered Orders = SUM(v_fact_fulfillment[Is Delivered])` |
 | Late rate | Tỷ lệ đơn giao trễ trên tổng số đơn đã giao | $\sum \text{is\_late} / \sum \text{is\_delivered}$ | `fact_order_fulfillment` (`v_fact_fulfillment`) | `is_delivered = 1` (tự động qua mẫu số) | BR-O3, BR-K2 | `Late Rate = DIVIDE(SUM(v_fact_fulfillment[Is Late]), [Delivered Orders])` |
 | Avg delivery days | Thời gian giao hàng trung bình từ lúc đặt tới lúc khách nhận (ngày) | $\sum \text{delivery\_lag} / \sum \text{is\_delivered}$ | `fact_order_fulfillment` (`v_fact_fulfillment`) | `is_delivered = 1` | BR-O2, BR-P1-1 | `Avg Delivery Days = DIVIDE(SUM(v_fact_fulfillment[Delivery Lag (days)]), [Delivered Orders])` |

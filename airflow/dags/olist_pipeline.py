@@ -42,10 +42,10 @@ def _log_task(context: dict, status: str) -> None:
                 """insert into meta.etl_run_log (run_id, step, started_at, ended_at, status, message)
                    values (%s, %s, %s, %s, %s, %s)""",
                 (
-                    context["run_id"],
-                    ti.task_id,
+                    context["dag_run"].run_id,
+                    f"airflow:{ti.task_id}",
                     ti.start_date,
-                    datetime.now(timezone.utc),
+                    ti.end_date or datetime.now(timezone.utc),
                     status,
                     str(exc)[:2000] if exc else None,
                 ),

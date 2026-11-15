@@ -1,5 +1,4 @@
 {#- P1: v_hub_scenario — Chỉ lấy model_run_id mới nhất từ ml.hub_scenario -#}
-{{ config(pre_hook="{{ ensure_ml_p1_tables() }}") }}
 with latest_run as (
     select model_run_id
     from {{ source('meta', 'model_registry') }}

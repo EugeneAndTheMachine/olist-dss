@@ -1,5 +1,4 @@
 {#- P1: v_order_late_risk — Chỉ lấy model_run_id mới nhất từ ml.order_late_risk -#}
-{{ config(pre_hook="{{ ensure_ml_p1_tables() }}") }}
 with latest_run as (
     select model_run_id
     from {{ source('meta', 'model_registry') }}
