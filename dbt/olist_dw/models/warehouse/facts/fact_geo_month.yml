@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: fact_geo_month
+    description: >
+      P2. Periodic snapshot: 1 dòng = 1 zip × 1 tháng mua (sparse). Phía cầu theo zip của khách trên đơn, phía cung
+      theo zip của seller (BR-P2-2). Chỉ đơn counts_as_sale có ít nhất 1 item, cùng tập đơn với KPI Orders / GMV
+      (BR-P2-1). Mọi measure cộng được theo zip; customers_active, sellers_active không cộng được theo tháng.
+      Tỷ lệ tính ở DAX / ML từ tử số và mẫu số (kpi_dictionary mục P2).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [geo_key, month_date_key]
+    columns:
+      - name: geo_key
+        description: "Zip → dim_geography (customer geo cho measure cầu, seller geo cho measure cung)."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_geography')
+              field: geo_key
+      - name: month_date_key
+        description: "Ngày đầu tháng mua (YYYYMM01) → dim_date."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: orders_placed
+        description: "Cầu: số đơn bán của khách ở zip này."
+      - name: gmv_placed
+        description: "Cầu: GMV (Σ giá item, không gồm ship) của các đơn đó. Thị trường của khu vực."
+      - name: freight_placed
+        description: "Cầu: Σ phí ship của các đơn đó."
+      - name: orders_local
+        description: "Cầu: số đơn có primary seller cùng bang với khách (BR-P2-3)."
+      - name: gmv_local
+        description: "Cầu: GMV của các đơn local. Supply gap = gmv_placed − gmv_local."
+      - name: customers_active
+        description: "Cầu: số khách (customer_key) có đơn bán trong tháng. Không cộng theo tháng."
+      - name: customers_new
+        description: "Cầu: số khách có đơn đầu tiên trong tháng, ở zip của đơn đầu (BR-P2-4)."
+      - name: delivered_orders
+        description: "Cầu: số đơn đã giao (theo tháng mua). Mẫu số của late rate (BR-K2)."
+      - name: late_orders
+        description: "Cầu: số đơn giao trễ (BR-O3)."
+      - name: delivery_lag_sum
+        description: "Cầu: Σ số ngày giao của đơn đã giao. Avg delivery days = delivery_lag_sum / delivered_orders."
+      - name: orders_shipped
+        description: "Cung: số đơn bán có primary seller ở zip này (BR-W5)."
+      - name: gmv_sold
+        description: "Cung: Σ giá item bán bởi seller ở zip này (theo seller của từng item)."
+      - name: sellers_active
+        description: "Cung: số seller (seller_id) ở zip này có ít nhất 1 item bán trong tháng. Không cộng theo tháng."

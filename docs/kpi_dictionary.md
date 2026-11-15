@@ -38,8 +38,23 @@ Cột: **KPI** · **Định nghĩa nghiệp vụ** · **Công thức** (tử / m
 
 ## P2 — Regional market (Hiếu)
 
+Khu vực = thuộc tính của `v_dim_customer_geo` (region → state → zip_prefix_2 → zip_prefix_3 → zip) nối `v_fact_geo_month[geo_key]`.
+Tử số và mẫu số của mọi tỷ lệ cùng lấy trong `fact_geo_month`, nên Σ khớp KPI chung (`assert_reconcile_geo_month`).
+
 | KPI | Định nghĩa nghiệp vụ | Công thức | Fact nguồn | Bộ lọc | Rule liên quan | DAX measure |
 | --- | --- | --- | --- | --- | --- | --- |
+| Market size (GMV) | GMV do khách trong khu vực đặt (không gồm ship) | Σ `gmv_placed` | `fact_geo_month` | — | BR-K1, BR-P2-1, BR-P2-2 | `P2 Market Size = SUM(v_fact_geo_month[gmv_placed])` |
+| Orders placed | Số đơn bán của khách trong khu vực | Σ `orders_placed` | `fact_geo_month` | — | BR-K1, BR-P2-1 | `P2 Orders Placed = SUM(v_fact_geo_month[orders_placed])` |
+| Active customers | Số khách có đơn trong tháng, trung bình theo tháng của kỳ chọn | trung bình theo tháng của Σ `customers_active` | `fact_geo_month` | — | BR-P2-7 | `P2 Active Customers = AVERAGEX(VALUES(v_fact_geo_month[month_date_key]), CALCULATE(SUM(v_fact_geo_month[customers_active])))` |
+| New customers | Số khách mua lần đầu, ở khu vực của đơn đầu tiên | Σ `customers_new` | `fact_geo_month` | — | BR-P2-4 | `P2 New Customers = SUM(v_fact_geo_month[customers_new])` |
+| Active sellers | Số seller có bán trong tháng, trung bình theo tháng của kỳ chọn | trung bình theo tháng của Σ `sellers_active` | `fact_geo_month` | — | BR-P2-7 | `P2 Active Sellers = AVERAGEX(VALUES(v_fact_geo_month[month_date_key]), CALCULATE(SUM(v_fact_geo_month[sellers_active])))` |
+| Customers per seller | Áp lực cầu lên nguồn cung tại chỗ | Active customers / Active sellers | `fact_geo_month` | khu vực ≥ 20 đơn (BR-P2-6) | BR-P2-6, BR-P2-7 | `P2 Customers per Seller = DIVIDE([P2 Active Customers], [P2 Active Sellers])` |
+| Local fulfilment share | Tỷ lệ đơn được seller cùng bang phục vụ | Σ `orders_local` / Σ `orders_placed` | `fact_geo_month` | khu vực ≥ 20 đơn | BR-P2-3, BR-P2-6 | `P2 Local Share = DIVIDE(SUM(v_fact_geo_month[orders_local]), SUM(v_fact_geo_month[orders_placed]))` |
+| Supply gap (BRL) | GMV khu vực mua từ seller ngoài bang | Σ `gmv_placed` − Σ `gmv_local` | `fact_geo_month` | — | BR-P2-3 | `P2 Supply Gap = SUM(v_fact_geo_month[gmv_placed]) - SUM(v_fact_geo_month[gmv_local])` |
+| Orders per 1,000 inhabitants | Mức độ dùng TMĐT, chỉ ở cấp bang trở lên | Σ `orders_placed` / `state_population` × 1 000 | `fact_geo_month`, `v_dim_state` | cấp bang / vùng; kỳ 12 tháng 2017-09 … 2018-08 | BR-W12, BR-P2-8 | `P2 Orders per 1000 = DIVIDE([P2 Orders Placed], SUM(v_dim_state[state_population])) * 1000` |
+| Area growth | GMV 3 tháng gần nhất so với cùng 3 tháng năm trước (YoY) | (GMV_3m − GMV_3m_ly) / GMV_3m_ly | `fact_geo_month` | ≥ 30 đơn ở cả hai cửa sổ, nếu không → trống | BR-K5, BR-P2-5 | `P2 Area Growth = VAR cur = CALCULATE([P2 Market Size], DATESINPERIOD(v_dim_date[Date], MAX(v_dim_date[Date]), -3, MONTH)) VAR ly = CALCULATE([P2 Market Size], DATESINPERIOD(v_dim_date[Date], EDATE(MAX(v_dim_date[Date]), -12), -3, MONTH)) VAR ok = CALCULATE([P2 Orders Placed], DATESINPERIOD(v_dim_date[Date], MAX(v_dim_date[Date]), -3, MONTH)) >= 30 && CALCULATE([P2 Orders Placed], DATESINPERIOD(v_dim_date[Date], EDATE(MAX(v_dim_date[Date]), -12), -3, MONTH)) >= 30 RETURN IF(ok, DIVIDE(cur - ly, ly))` |
+
+Late rate theo khu vực dùng KPI *Late rate (area)* của P1; trên `fact_geo_month` cho cùng số (Σ `late_orders` / Σ `delivered_orders`).
 
 ## P3 — Category (Vinh)
 

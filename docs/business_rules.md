@@ -131,6 +131,14 @@ Ví dụ:
 
 | ID | Câu hỏi | Bằng chứng | Lựa chọn | Quyết định | Code ở đâu | Test | Ai chốt / ngày |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| BR-P2-1 | Nguồn và tập đơn của `fact_geo_month` | GMV đơn bán ở `fact_order_fulfillment` = GMV ở `fact_order_item` = 13 494 400,74; 98 199 đơn bán có item (8 đơn bán không có item) | (a) từ `stg` (refactor §4.3) (b) từ `fact_order_fulfillment` + `fact_order_item` + `dim_customer` | (b), cùng hướng BR-P3-3: không định nghĩa lại "bán", "trễ", "GMV". Chỉ đơn `counts_as_sale` có ≥ 1 item = tập đơn của KPI Orders / GMV. Grain zip × tháng mua, sparse (78 245 dòng) | `fact_geo_month` | `assert_reconcile_geo_month`: GMV, đơn, delivered, late, khách mới khớp nguồn | Hiếu, 15/11 |
+| BR-P2-2 | Đơn thuộc khu vực nào | Đơn nhiều seller 1,3% (BR-W5) | — | Cầu: zip khách trên đơn (`customer_geo_key`, BR-CS3-2). Cung: `orders_shipped` theo zip primary seller; `gmv_sold`, `sellers_active` theo zip seller của từng item (GMV đơn nhiều seller chia đúng cho từng seller) | `fact_geo_month` | Σ `gmv_sold` = Σ `gmv_placed` | Hiếu, 15/11 |
+| BR-P2-3 | Đơn "local" | Toàn sàn 35,75% đơn local; SP 75,4%, RJ 7,9%, BA 2,1% | cùng bang / cùng zip_prefix_2 / khoảng cách | Primary seller cùng bang với khách. Đơn có item luôn có primary seller nên không có trường hợp không xác định | `fact_geo_month.orders_local`, `gmv_local` | — | Hiếu, 15/11 |
+| BR-P2-4 | Khách mới | BR-CW3-1, BR-CW3-2 | — | Khách có đơn đầu tiên (mọi status) trong tháng, đếm ở zip của đơn đầu tiên; Σ = 96 096 khách | `fact_geo_month.customers_new` | trong `assert_reconcile_geo_month` | Hiếu, 15/11 |
+| BR-P2-5 | Growth của khu vực (BR-K5) | Sàn tăng 73,8% YoY (BR-P3-4); khu vực nhỏ dao động mạnh | (a) YoY tuyệt đối 3 tháng (refactor §5) (b) tương đối so với sàn (như P3) | (a) cho KPI *Area growth*, chỉ tính khi ≥ 30 đơn ở cả hai cửa sổ (cùng ngưỡng BR-P3-4). Growth tương đối so với sàn, nếu cần cho xếp hạng, quyết ở ML-2c | DAX `P2 Area Growth` | — | Hiếu, 15/11 |
+| BR-P2-6 | Ngưỡng volume (BR-K6, phần P2) | P1 dùng ≥ 20 đơn đã giao (BR-K6); zip có vài đơn cho tỷ lệ 0% / 100% | 20 / 50 / 100 | ≥ 20 đơn trong kỳ trước khi xếp hạng một tỷ lệ theo khu vực (cùng P1). Cấp zip chỉ hiển thị số đếm | DAX / ML P2 | — | Hiếu, 15/11 |
+| BR-P2-7 | Khách / seller active và `sellers_registered` | `customers_active`, `sellers_active` không cộng được theo tháng; fact sparse nên số luỹ kế `sellers_registered` không có dòng ở mọi tháng cho mọi zip | (a) giữ `sellers_registered` (b) bỏ | (b), lệch refactor §4.3. KPI dùng trung bình theo tháng của active customers / sellers | `fact_geo_month`, DAX | — | Hiếu, 15/11 |
+| BR-P2-8 | Mức dùng TMĐT theo dân số | Dân số chỉ có cấp bang (BR-W12) | — | Orders / 1 000 dân chỉ ở cấp bang / vùng, kỳ 12 tháng 2017-09 … 2018-08 | DAX `P2 Orders per 1000` | — | Hiếu, 15/11 |
 
 ## P3 — Category (Vinh)
 
