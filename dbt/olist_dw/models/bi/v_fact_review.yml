@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: v_fact_review
+    description: "Power BI: fact_review. Measure review lọc is_latest_for_order = 1 (BR-K3)."
+    columns:
+      - name: review_creation_date_key
+        description: "Nối v_dim_date."
+      - name: primary_seller_key
+        description: "Nối v_dim_seller."
+      - name: score_sum
+        description: "Avg score = Σ score_sum / Σ review_count."
+      - name: is_low_score
+        description: "Low-score rate = Σ is_low_score / Σ review_count."
+      - name: is_latest_for_order
+        description: "Lọc = 1 cho KPI."
